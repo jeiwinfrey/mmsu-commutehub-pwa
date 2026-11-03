@@ -1,0 +1,3 @@
+interface:
+  display_name: "CommuteHub UI"
+  short_description: "Mobile CommuteHub UI with shadcn and shared tokens"
