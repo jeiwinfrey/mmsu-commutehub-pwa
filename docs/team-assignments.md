@@ -1,6 +1,6 @@
-# Team assignments — UI only
+# Team assignments and feature ownership
 
-Assignments follow the supplied speaker order. Everyone programs UI; infrastructure is deferred.
+Assignments follow the supplied speaker order. The original UI assignments remain the feature ownership map; the later functional-app request authorizes shared infrastructure and persistence.
 
 | Speaker / owner | Feature | TODO | Preview |
 | --- | --- | --- | --- |
@@ -18,10 +18,10 @@ Assignments follow the supplied speaker order. Everyone programs UI; infrastruct
 
 ## Handoffs
 
-- Auth → Onboarding → Routes → Vehicles → Pickup → Tracking → Trips. These are UI preview links, not an integrated persistent flow yet.
+- Auth → Onboarding → Routes → Vehicles → Pickup → Tracking → Trips. These form the integrated commute journey.
 - Routes owns corridor/stop labels. Vehicles owns fare/occupancy presentation. Pickup owns the radius selector; Tracking consumes its presentation shape.
-- Community owns report presentation; Alerts references the same sample report IDs. No duplicated report text in alert fixtures.
+- Community owns report presentation; Alerts link to persisted community report IDs.
 - Onboarding and Profile agree on preference labels. Planner uses shared route IDs.
-- Shared shell, navigation, shadcn source, theme, package files, types, and fixtures require coordination. No member owns infrastructure in this milestone.
+- Shared shell, navigation, shadcn source, theme, package files, types, and fixtures require coordination. Infrastructure changes must be reviewed alongside the affected feature contracts.
 
 Each member's PR must include phone screenshots, local interaction steps, and verification results. Do not mark a task complete merely because its placeholder exists.

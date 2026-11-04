@@ -1,8 +1,10 @@
 # MMSU CommuteHub
 
-A mobile UI starter for our 11-person team, built with **Next.js App Router, TypeScript, Tailwind CSS, shadcn/ui, and Lucide icons**.
+A mobile-first commuter PWA built with **Next.js App Router, TypeScript, Tailwind CSS, shadcn/ui, Solar icons, Motion, Clerk, and Convex**.
 
-**Current milestone: build the UI.** The phone shell, navigation, shared components, and feature placeholders are ready. Each member implements their assigned screens using sample data and local interactions. The project is not yet an installable PWA; authentication, database persistence, GPS, live simulation, and push notifications are future work.
+The current implementation connects sign-in, preferences, saved routes, trip history, departure plans, community reports, and alerts to a shared Convex database. Vehicle operations are simulated. Terminal coordinates and fare tariffs are illustrative and require local verification. No seats are reserved or tickets sold.
+
+**Free services only. Do not start subscriptions, trials, paid plans, or purchases.** Authentication currently uses a Clerk development instance; ownership claiming and production credentials need the account owner's approval. See [implementation status](docs/implementation-status.md) for verified checks and remaining release work.
 
 ## Before you start coding
 
@@ -14,7 +16,7 @@ A mobile UI starter for our 11-person team, built with **Next.js App Router, Typ
 
 ## Team assignments
 
-All assignments are **UI only**. The speaker numbers map to the names supplied by the team.
+The original feature owners remain: The speaker numbers map to the names supplied by the team.
 
 | Member | Feature | Working folder | Your TODO |
 | --- | --- | --- | --- |
@@ -34,59 +36,43 @@ See [team assignments and handoffs](docs/team-assignments.md) for how features c
 
 ## Run the project
 
-Install **Node.js 20.9 or newer** and npm. No API keys or external accounts are required to run this UI starter.
+Use Node.js 20.9+ and npm. A connected Clerk and Convex development environment is required for account features. Credentials belong in ignored `.env.local`, never in Git.
 
 ```sh
-git clone https://github.com/jeiwinfrey/mmsu-commutehub-pwa.git
-cd mmsu-commutehub-pwa
 npm ci
+# Copy .env.example to .env.local and configure your own free development services.
 npm run dev
 ```
 
-Open [http://localhost:3001](http://localhost:3001). The root redirects to `/commute`. Sign-in and onboarding are independently accessible at `/sign-in` and `/onboarding`.
-
-For another port, run `npx next dev --port 3002`. For a production preview, run `npm run build` followed by `npm start -- --port 3001`.
-
-## Build your feature
-
-```sh
-git switch main
-git pull --ff-only
-git switch -c ui/your-name-feature
-```
-
-- Replace `src/features/<your-feature>/screen.tsx` and add local components in its `components/` folder. Keep `src/app` route pages thin.
-- Import the installed library from `@/components/ui/<component>`. The complete official shadcn component set is already installed; inspect its [usage notes](docs/ui-components.md) before adding or replacing anything.
-- Use `src/types/commute.ts` and the read-only samples in `src/lib/demo-fixtures.ts`. Use local React state for filters, steps, forms, and preview interactions.
-- Coordinate changes to the shared shell, navigation, global CSS, types, fixtures, dependencies, and shadcn source before editing them.
-- Keep the same phone layout at 320–430 px, with a maximum shell width of 480 px on larger displays. No desktop sidebar.
-- Keep sample fares, vehicle positions, occupancy, and reports clearly labeled. Candidate terminals are unverified. Preview actions must not claim data was saved, a report was published, or a notification was sent.
-
-## Check and submit your work
+Open [localhost:3001](http://localhost:3001). For a new deployment, run `npx convex dev` to configure Convex, configure Clerk's `convex` JWT template, and set the matching issuer in `convex/auth.config.ts`. Read [service setup](docs/service-setup.md).
 
 ```sh
 npm run lint
 npm run typecheck
+npm run test:backend
 npm run build
+npm run test:e2e
 ```
 
-Check your screens at **320, 360, 390, and 430 px**, plus landscape. Verify direct-page refresh, readable long text, keyboard/focus behavior, relevant loading/empty/error states, and no horizontal overflow or content covered by navigation.
+Browser integration tests use a dedicated Clerk **development** test account under `example.com`; no real verification emails are sent. They exercise the connected development database. Do not run them against production accounts. Playwright artifacts and all credentials are ignored.
 
-Commit your feature on your branch, push it, and open a pull request to `main`. Include phone screenshots, interaction steps, verification results, and any shared-file changes. Check off only the TODO items you actually completed and verified.
+## App flow
 
-## Documentation
+Welcome/sign-in → onboarding → route → vehicle and fare → pickup and radius → tracking → boarding → completion. Five navigation destinations: Commute, Planner, Trips, Community, Profile. The header bell opens Alerts.
 
-| Read this | What it is for |
-| --- | --- |
-| [Figma handoff](docs/figma-design.md) | Editable design, prototype starting points, and direct screen links by owner |
-| [Team assignments](docs/team-assignments.md) | Feature ownership and cross-feature handoffs |
-| [Individual TODOs](docs/todos/) | Each member's implementation checklist |
-| [Design guide](docs/design-guide.md) | Shared UI look, layout, tokens, accessibility, and copy rules |
-| [Installed UI components](docs/ui-components.md) | shadcn inventory, imports, providers, and compatibility notes |
-| [Architecture](docs/architecture.md) | Folder responsibilities, routes, types, and fixture conventions |
-| [Contributing guide](docs/contributing.md) | Branches, pull requests, coordination, and checks |
-| [Project UI skill](.agents/skills/commutehub-ui/SKILL.md) | Codex guidance for consistent screen implementation; use `$commutehub-ui` when available or ask your agent to read it |
-| [PRD](prd.md) | Long-term functional product requirements; the current UI-only milestone is identified at the top |
-| [Future integrations](docs/future-integrations.md) | Deferred PWA, Google sign-in, Convex, persistence, GPS, simulation, and notifications |
+- Account data persists in Convex and is scoped to the authenticated Clerk subject.
+- Shared simulated vehicles update server-side every 15 seconds. OSRM geometry is seeded once and reused; OpenStreetMap tiles retain attribution.
+- Pickup proximity and departure reminders create account alerts. Background delivery requires explicit browser notification permission and configured VAPID keys.
+- PWA installation includes an offline information page. Private account pages, API responses, and map tiles are not cached.
+- Manual pickup works without GPS. Find my nearest stop uses coordinates only in the browser.
 
-Figma uses Arimo as an Arial-compatible substitute; the app keeps its existing system font stack. No feature is connected to real transport operations yet.
+## Project guides
+
+- [PRD](prd.md) · [Design guide](docs/design-guide.md) · [Architecture](docs/architecture.md)
+- [Team handoffs](docs/team-assignments.md) · [Contributing](docs/contributing.md)
+- [shadcn inventory](docs/ui-components.md) · [Project UI skill](.agents/skills/commutehub-ui/SKILL.md)
+- [Service setup](docs/service-setup.md) · [Implementation status](docs/implementation-status.md)
+
+Original UI assignments are preserved for ownership and review; their earlier UI-only restrictions are superseded by the explicit functional-app assignment. Figma remains the original team flow reference; the latest flat visual direction is implemented in code without editing Figma.
+
+See [third-party notices](NOTICE.md) for Solar icon attribution and map credits.

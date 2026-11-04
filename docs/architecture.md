@@ -1,40 +1,41 @@
 # Architecture
 
-## Current boundary
+Next.js App Router renders a single phone layout, max 480px, at every viewport. `src/app` contains thin pages; `src/features` holds the 11 owned features. Shared Radix shadcn components live in `src/components/ui`; layout, maps, account guards, providers, and notification/install controls are shared components.
 
-This is a runnable UI scaffold, not the functional release in the PRD. Next.js handles routes/rendering; local React state supports UI previews. No global store, external API, backend-shaped service layer, database, auth guard, PWA registration, or persistence is configured.
+## Data and identity
 
-## Structure
+`AppProvider` mounts Clerk and `ConvexProviderWithClerk`. The Clerk `convex` JWT template has audience `convex`; its issuer must match `convex/auth.config.ts`. Every private query/mutation derives the owner from `ctx.auth.getUserIdentity().subject`. Client-supplied owner IDs are never accepted. Public reports omit the private authentication subject.
 
-- `src/app`: thin pages and route-group layouts. `(main)` uses the phone shell with navigation; `(entry)` uses the standalone phone shell. Route-group names are not URL segments.
-- `src/features/<feature>`: member-owned screen, local components, and README. Place feature-only state/components here. Empty components folders are tracked with `.gitkeep`.
-- `src/components/ui`: shadcn source, shared by all members.
-- `src/components/layout`: shared shell, bottom navigation, and scaffold placeholder. The generic placeholder is temporary scaffolding; replace it inside your feature screen rather than redesigning it for everyone.
-- `src/types/commute.ts`: minimal presentation contracts. They are not Convex schemas or transport API responses.
-- `src/lib/demo-fixtures.ts`: read-only sample routes in both directions, one vehicle/trip/plan/profile, and linked community report/alert. Add edge-case fixtures by agreement. Bus endpoint lists are UI samples, not researched full stopping patterns. Coordinates are deliberately omitted.
-- `public`: reserved for future approved assets; starter artwork is removed.
+`convex/schema.ts` defines profiles, saved routes, vehicles, road paths, trips, plans, reports, confirmations, flags, notifications, and push registrations. Server mutations validate fares, journey direction, pickup radius, ownership, and trip-state transitions. Public route definitions are in `src/lib/commute-catalog.ts`; fare cents are integers.
 
-## Routes and ownership
+Unsaved route/vehicle/pickup selections use browser session storage to survive OAuth redirects and refresh. This is a draft, not a booking. Saved active trips are loaded from Convex, independent of that draft. Exact optional device coordinates are neither persisted nor sent to Convex.
 
-| URL | Owner | Layout |
-| --- | --- | --- |
-| `/` | Shared redirect to `/commute` | Main |
-| `/sign-in` | Russel: auth | Entry |
-| `/onboarding` | Aira: onboarding | Entry |
-| `/commute` | Ashley: routes | Main |
-| `/commute/vehicles` | Jeiwinfrey: vehicles | Main |
-| `/commute/pickup` | Kathrina: pickup | Main |
-| `/commute/tracking` | France: tracking | Main |
-| `/trips` | Rocky: trips | Main |
-| `/planner` | Michaella: planner | Main |
-| `/community` | Kacey: community | Main |
-| `/alerts` | Princess: alerts | Main |
-| `/profile` | Chadrick: profile | Main |
+## Routes
 
-## Contracts and data flow
+| Route | Feature owner |
+| --- | --- |
+| `/sign-in`, `/sign-up` | Russel |
+| `/onboarding` | Aira |
+| `/commute` | Ashley |
+| `/commute/vehicles` | Jeiwinfrey |
+| `/commute/pickup` | Kathrina |
+| `/commute/tracking` | France |
+| `/trips` | Rocky |
+| `/planner` | Michaella |
+| `/community` | Kacey |
+| `/alerts` | Princess |
+| `/profile` | Chadrick |
 
-Presentation types include RouteOption/Stop, Vehicle/FareEstimate, PickupSelection, Trip, PlannerResult, CommuteReport/AlertItem, and Profile. Fare samples use integer centavos. Directions are explicit; radius choices are 100/250/500/1,000 m. AlertItem references a report ID to keep Community and Alerts consistent. Every fixture carries a sample source; terminal records are candidates.
+## Simulation and maps
 
-Initial pages only link to one another and do not transfer selections. During UI development use typed props and local state; coordinate a later shared flow separately instead of inventing persistence or routing contracts independently. Keep feature component imports inside their own feature plus shared folders; avoid importing another member's screen. Promote reusable pieces by agreement. No runtime fixture-to-backend adapter is needed now.
+Convex checks every 15 seconds and advances the shared simulated fleet while trips are waiting or reminders are due. When idle, it avoids geometry reads/fleet writes; list queries project the shared clock forward. A vehicle's phase advances by speed along stored geometry. `vehicles.seedPaths` fetches OSRM road paths sequentially, spaced at least 1.2 seconds apart, and saves the result; regular ticks do not call OSRM. Both directions are distinct simulated services. No real operator feeds are implied. Failed route seeding falls back to a labeled schematic.
 
-The future backend/auth/PWA backlog is unassigned in `future-integrations.md`. Existing full PRD requirements do not expand this UI milestone.
+Leaflet displays OpenStreetMap tiles and attribution. Map tiles are not cached by the service worker. A selectable stop list remains available when map tiles fail. Proximity checks the travelled road segments against the fixed pickup coordinate, including crossings between ticks; an account alert is created once per waiting trip. No geofencing of the student's phone is required.
+
+## Notifications and PWA
+
+Convex internal jobs create account alerts and send Web Push using VAPID. Device permission is opt-in. Expired push endpoints are pruned. Sign-out unregisters the current device endpoint. Community alerts apply to saved routes; planner reminders apply to saved departure times.
+
+`manifest.ts` and icons support installation. `public/sw.js` caches only public shell assets and an offline information page. It never caches private pages, auth/API responses, or map tiles. Disconnected writes remain pending until the connection recovers; they are never marked saved before the server acknowledges them.
+
+`DELETE /api/account` checks origin and authenticated identity, removes that user's application data, then deletes the Clerk account. It is triggered only through a typed confirmation in Profile. Service credentials are server-only and ignored by Git.

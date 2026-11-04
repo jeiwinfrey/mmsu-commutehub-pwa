@@ -56,15 +56,15 @@
   --sidebar-accent: var(--accent); --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border); --sidebar-ring: var(--ring);
   color-scheme: light;
-  --background: #fafaf9; --foreground: #1c1917;
+  --background: #ffffff; --foreground: #1c1917;
   --card: #ffffff; --card-foreground: #1c1917;
   --popover: #ffffff; --popover-foreground: #1c1917;
-  --primary: #166534; --primary-foreground: #ffffff;
+  --primary: #163d2c; --primary-foreground: #ffffff;
   --secondary: #f0f2ef; --secondary-foreground: #1c1917;
   --muted: #f0f2ef; --muted-foreground: #57534e;
   --accent: #e8f3eb; --accent-foreground: #166534;
-  --destructive: #b91c1c; --border: #d6d3d1; --input: #d6d3d1;
-  --ring: #166534; --radius: 0.625rem;
+  --destructive: #b91c1c; --border: #e3e8e1; --input: #e3e8e1;
+  --ring: #166534; --radius: 1rem;
   --warning: #fef3c7; --warning-foreground: #78350f;
 }
 @layer base {
@@ -85,3 +85,37 @@
 .skip-link { position: fixed; top: 8px; left: 8px; padding: 12px; background: var(--primary); color: var(--primary-foreground); transform: translateY(-200%); }
 .skip-link:focus { transform: translateY(0); z-index: 10; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* Shared phone UI used by the five connected demo assignments. */
+.feature-stack { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.feature-stack [data-slot="button"] { min-height: 48px; white-space: normal; }
+.notice-info { background: var(--muted); }
+.notice-info [data-slot="alert-title"] { color: var(--primary); }
+.notice-warning { background: var(--warning); color: var(--warning-foreground); }
+.notice-warning [data-slot="alert-description"] { color: var(--warning-foreground); }
+.metric { display: flex; flex-direction: column-reverse; gap: 4px; padding: 12px 8px; background: var(--muted); border-radius: var(--radius); min-width: 0; overflow-wrap: anywhere; }
+.preview-tools { border: 1px dashed var(--border); border-radius: var(--radius); padding: 12px; }
+.preview-tools summary { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; font-size: 14px; color: var(--muted-foreground); }
+.bottom-navigation { z-index: 20; }
+.map-shell { position: relative; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; isolation: isolate; }
+.map-shell .leaflet-container { height: 260px; width: 100%; font-family: Arial, sans-serif; }
+.map-shell .leaflet-control-attribution { font-size: 10px; max-width: 100%; }
+.map-shell .leaflet-bar a { min-width: 44px; min-height: 44px; line-height: 44px; }
+.map-shell .leaflet-pane { z-index: 1; }
+.map-shell .leaflet-top, .map-shell .leaflet-bottom { z-index: 2; }
+.map-pin { display: grid; place-items: center; width: 32px; height: 32px; background: var(--primary); color: var(--primary-foreground); border: 3px solid var(--card); border-radius: 50%;  font-weight: bold; }
+
+/* Flat visual system: use shape, spacing, and contrast rather than elevation. */
+*, *::before, *::after { box-shadow: none !important; text-shadow: none !important; }
+.app-header { border-bottom: 0; }
+h1 { font-size: 2rem; font-weight: 600; letter-spacing: -.055em; line-height: 1.12; }
+.hero-panel { background: var(--primary); color: white; border-radius: 24px; padding: 28px 24px; display: flex; flex-direction: column; gap: 20px; }
+.hero-panel h1 { font-size: 2.5rem; }
+.hero-panel p { color: #e2efdf; }
+.eyebrow { font-size: .7rem; letter-spacing: .14em; font-weight: 700; }
+[data-slot="card"] { border-radius: 22px; }
+[data-slot="button"] { min-height: 44px; }
+.nav-destination-active { background: transparent; font-weight: 700; }
+.nav-destination-active svg { background: #e4f0d8; border-radius: 10px; width: 40px; height: 30px; padding: 4px; }
+.empty-panel { padding: 32px 20px; text-align: center; border: 1px dashed var(--border); border-radius: 22px; }
+.cl-rootBox, .cl-cardBox { width: 100%; max-width: 100%; }

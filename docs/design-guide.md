@@ -12,8 +12,8 @@ Source of truth: `src/app/globals.css`. Light theme only for this milestone.
 
 | Role | Token | Value |
 | --- | --- | --- |
-| Primary / focus | `primary`, `ring` | Green #166534 |
-| Background | `background` | #fafaf9 |
+| Primary / focus | `primary`, `ring` | Deep green #163d2c |
+| Background | `background` | #ffffff |
 | Text | `foreground` | #1c1917 |
 | Surface | `card`, `popover` | White |
 | Muted surface | `muted`, `secondary` | #f0f2ef |
@@ -25,7 +25,7 @@ Source of truth: `src/app/globals.css`. Light theme only for this milestone.
 
 Use semantic classes such as `bg-primary`, `text-muted-foreground`, and `bg-warning`; do not scatter raw colors or per-feature themes. White-on-green primary actions and dark warning text are the defaults. Check contrast for new combinations; never use color as the only status signal.
 
-System sans font, 16 px body, 1.5 line height. H1: 24 px/semibold; section title: 18 px/semibold; supporting labels: 14 px. Only compact bottom navigation uses 11 px. Use tabular numerals for changing times/fares. Spacing scale: 4, 8, 12, 16, 24, 32 px. Standard radius: 10 px. Use restrained borders and shadows.
+System sans font, 16 px body, 1.5 line height. H1: 24 px/semibold; section title: 18 px/semibold; supporting labels: 14 px. Only compact bottom navigation uses 11 px. Use tabular numerals for changing times/fares. Spacing scale: 4, 8, 12, 16, 24, 32 px. Standard control radius: 16 px; panels: 22–24 px. Use restrained borders. No shadows or gradients. Motion uses short opacity/transform transitions and respects reduced motion.
 
 ## shadcn/ui rules
 
@@ -43,8 +43,8 @@ Coordinate package/shared-file edits. Do not overwrite customized components. Th
 
 44×44 px minimum touch targets, visible focus, meaningful link text, decorative icons hidden from assistive technology, and names for icon-only controls. Use native elements. A navigation bar uses links with `aria-current="page"`, not ARIA tabs. Respect reduced motion; no map animation is required. Maps need a stop-list/manual-selection alternative.
 
-UI exercises may use local React state for steps, filters, validation, sheets, and preview-state selectors. Default to Server Components; add `"use client"` at the interactive boundary. No browser permission prompts, storage, timers simulating live operations, SDKs, fetch calls, or credential requirements.
+Use local state for unsaved forms, filters, and overlays. Persist account-owned records through authenticated Convex functions. Ask for GPS and notification permission only after a user taps the related action. Manual pickup is always available. PWA infrastructure, backend jobs, Clerk, and Convex are now explicitly authorized; free services only.
 
 ## Honest sample states
 
-Show “Sample data” near fares, vehicles, reports, and planning results. Say “Preview report” or “Preview notification”, never “Published” or “Notification sent”. Sign-in/account deletion previews must explain they are not connected. Candidate terminals show “Unverified candidate”; sample occupancy and ETA are not measured live values. Use fixed fixture timestamps and Asia/Manila for displayed dates; do not relabel old fixtures as “just now”. Provide relevant empty, loading, error/retry, unavailable, stale, and success-preview states without claiming remote outcomes.
+Label simulated vehicle operations and illustrative fare/ETA inputs. Community reports and account actions are real; show success only after the server confirms the mutation. Never claim push delivery succeeded merely because an alert was queued. Candidate terminals show “Unverified candidate”; sample occupancy and ETA are not measured live values. Use fixed fixture timestamps and Asia/Manila for displayed dates; do not relabel old fixtures as “just now”. Provide relevant empty, loading, error/retry, unavailable, stale, and success-preview states without claiming remote outcomes.

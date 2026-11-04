@@ -2,7 +2,7 @@
 
 ## Work locally
 
-Use Node.js 20.9+ and npm. Run `npm ci`, then `npm run dev`; open http://localhost:3001. No secrets or accounts are required. Open your member TODO, ownership README, and design guide before editing. The Next.js version is pinned in package.json; consult its bundled documentation under `node_modules/next/dist/docs/` before applying unfamiliar APIs.
+Use Node.js 20.9+ and npm. Run `npm ci`, then `npm run dev`; open http://localhost:3001. Configure the ignored `.env.local` using [service setup](service-setup.md); Clerk and Convex development services are required for account features. Use free tiers only. Open your member TODO, ownership README, and design guide before editing. The Next.js version is pinned in package.json; consult its bundled documentation under `node_modules/next/dist/docs/` before applying unfamiliar APIs.
 
 ## Branch and ownership
 
@@ -15,11 +15,13 @@ Keep pages thin. Use `@/` imports. Place local components inside your feature. A
 ```sh
 npm run lint
 npm run typecheck
+npm run test:backend
 npm run build
+npm run test:e2e
 ```
 
 Inspect the feature on 320/360/390/430 px widths and landscape. Check keyboard focus, overlay close/return, long text, empty/loading/error states, and sample-data labels. Refresh the direct URL. No horizontal overflow or controls hidden behind navigation. Add screenshots and concise manual reproduction steps to the PR. Do not write tests that merely assert placeholder text; add focused behavior tests later when interactions warrant them.
 
 ## Completion
 
-Check off the member TODO with evidence. No external integration is part of any current assignment. UI controls may affect local preview state only, and must not imply a successful backend action. Leave PWA/auth/database implementation for a separately agreed phase.
+Check off the member TODO with evidence. The functional-app assignment now authorizes Clerk, Convex, maps, simulation jobs, Web Push, and PWA infrastructure. Report success only after server acknowledgement. Never commit secrets or auth state, enroll in subscriptions/trials/paid plans, or claim production readiness from a development login. Keep release blockers explicit in implementation-status.md.

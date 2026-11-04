@@ -1,16 +1,15 @@
-# Future integrations — deferred and unassigned
+# Integration and release backlog
 
-These tasks are intentionally **not implemented** and belong to no current member UI assignment. The full product requirements remain in `../prd.md`.
+The earlier UI-only deferral is superseded by the functional-app request. Clerk, Convex, maps, simulation, account persistence, and PWA files are implemented. Verification and release status are tracked in [implementation-status.md](implementation-status.md).
 
-- [ ] PWA foundation: manifest/icons, service worker, installation, offline handling, update lifecycle.
-- [ ] Clerk Google sign-in, sessions, production OAuth settings, account lifecycle.
-- [ ] Convex deployment, schema, authenticated functions, authorization, realtime subscriptions.
-- [ ] Persistent profiles/preferences, plans, trips, reports, read states, and retention/deletion.
-- [ ] Field-verified terminals, safe directional pickup locations, campus access, official fares.
-- [ ] Real map/provider integration and opt-in device GPS.
-- [ ] Server-driven mock fleet movement, speed/dwell, ETA, and crowding scenarios.
-- [ ] Server-side fixed-pickup geofencing, durable events, and job deduplication.
-- [ ] Web Push subscriptions, delivery/retries, physical-device testing, and scheduled reminders.
-- [ ] Community moderation, abuse controls, operational monitoring, and deployment.
+Remaining release work:
 
-There are no SDKs, credentials, endpoint stubs, permission requests, service worker, or manifest to fill in during this milestone. A future implementation must receive its own ownership split and tests. The new project's “pwa” name is a target, not a capability claim.
+- [ ] Claim Clerk development application with the owner's approved account permissions.
+- [ ] Configure a production Clerk instance and Google OAuth credentials/domains without paid enrollment.
+- [ ] Deploy and verify the HTTPS application against a production Convex deployment.
+- [ ] Verify installed PWA behavior and background push on real iOS/Android devices.
+- [ ] Field-verify directional terminal bays, safe pickup locations, campus access, and official fare tariffs.
+- [ ] Add operator-sourced GPS/occupancy only after explicit authorization and a data partnership.
+- [ ] Review moderation operations, rate limits, data retention, monitoring, and free-tier quotas before public launch.
+
+No subscriptions, free trials, paid plans, or purchases are authorized.

@@ -9,13 +9,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 <!-- END:nextjs-agent-rules -->
 
 
-# Team milestone rules
+# Current assignment
 
-Current work is UI-only. Read README.md, docs/design-guide.md, docs/architecture.md, and the relevant member TODO before changing a feature. Keep all 11 features separately owned. No PWA infrastructure, auth, Convex, SDKs, backend, permissions, persistent storage, or live simulation without a new explicit assignment. The full PRD is future scope; current TODOs take precedence for this milestone.
+The user explicitly expanded scope to a functional mobile PWA: Clerk Google sign-in, Convex persistence/authorization, working maps, planner/trips/community/alerts/profile, device notifications, and server-simulated vehicles. Original UI-only notes in member documents are historical. All vehicle operations and unverified fare/terminal data must be labeled honestly.
 
-Use shadcn/ui via its CLI, semantic theme tokens, accessible native controls, and local state for previews. Keep route pages thin and feature components in their assigned folder. Coordinate shared contract/navigation/theme/dependency changes. Run lint, typecheck, and production build. Label every mock action and sample dataset honestly.
+Use free tiers only. No subscriptions, trials, paid plans, or purchases. Never commit credentials, `.env.local`, `.clerk`, `.vercel`, authentication storage state, or test traces. Do not bypass required account approval or make Figma changes.
 
+Read README.md, docs/design-guide.md, docs/architecture.md, the relevant feature ownership README/TODO, and [.agents/skills/commutehub-ui/SKILL.md](.agents/skills/commutehub-ui/SKILL.md). Keep feature screens in their owned folders and route pages thin. Reuse installed shadcn components. Solar icons, Motion with reduced-motion support, semantic tokens, 44px touch targets, maximum 480px phone shell, no shadows or gradients.
 
-# Project UI skill
-
-For CommuteHub screen implementation, visual refinement, or UI review, read [.agents/skills/commutehub-ui/SKILL.md](.agents/skills/commutehub-ui/SKILL.md). It applies the shared design guide and shadcn conventions within the current assignment scope. Later explicit user instructions take precedence over the UI-only milestone.
+Verify lint, TypeScript, backend authorization tests, production build, and relevant browser flows. Browser integration tests target the development services using dedicated test accounts. Keep release blockers and incomplete device checks explicit in docs/implementation-status.md.

@@ -1,12 +1,12 @@
 # MMSU CommuteHub — Product Requirements Document
 
-Version: 1.1 · 3 November 2026 · Status: future product specification; current milestone is UI-only
+Version: 1.2 · 4 November 2026 · Status: functional implementation in progress
 
-## Current milestone: UI assignments only
+## Current milestone: connected mobile PWA
 
-This separate Next.js project is currently a **barebones UI scaffold**. The 11 member assignments cover presentation and local preview interactions only. Backend integration, authentication, actual persistence, GPS, simulation jobs, push notifications, and PWA infrastructure are deferred and unassigned. The project name describes its future delivery target, not an installed or offline-capable app today.
+The user explicitly expanded the initial UI-only assignment to a working application. Implement Clerk Google sign-in, authenticated Convex persistence, maps, saved plans/trips/reports/alerts/profile, installability, and device notifications. Only vehicle operations remain synthetic. Use Solar icons and Motion; keep the interface flat, minimal, without shadows or gradients. No Figma changes are requested.
 
-The functional requirements and acceptance criteria below are preserved as **future phases** and must not be interpreted as current member tasks. Use [team assignments](docs/team-assignments.md), [individual TODOs](docs/todos/), [design guide](docs/design-guide.md), and [future integration backlog](docs/future-integrations.md) for the current scope. The fixture catalog does not establish real boarding points or official fares.
+Use free tiers only. Never enroll in subscriptions, trials, paid plans, or purchases. Production ownership/credential changes requiring account consent must remain pending until the owner approves them. Implementation does not establish verified terminals, operator partnerships, or official fare tariffs. See [implementation status](docs/implementation-status.md) for actual verification rather than treating this specification as proof of completion.
 
 ## 1. Product decision
 
