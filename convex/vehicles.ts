@@ -1,3 +1,13 @@
+import {
+  fleetNetwork,
+  projectFleetVehicle,
+  offerForRoute,
+  runAtOrdinal,
+  runMetersAt,
+  BOARDING_GRACE_SECONDS,
+  FLEET_VERSION,
+} from "../src/lib/fleet-simulation";
+import { endAbandonedTrip } from "./lib/tripLifecycle";
 import { sweptDistance } from "./lib/geometry";
 import { v, ConvexError } from "convex/values";
 import {
@@ -9,180 +19,242 @@ import {
 import {
   commuteRoutes,
   vehiclesFor,
-  distanceMeters,
+  matchingRoutes,
 } from "../src/lib/commute-catalog";
 import { internal } from "./_generated/api";
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    const vehicles = await ctx.db.query("vehicles").collect();
-    const paths = await ctx.db.query("roadPaths").collect();
-    const now = Date.now();
-    return vehicles.map((vehicle) => {
-      const route = commuteRoutes.find((r) => r.id === vehicle.routeId)!;
-      const points = (paths.find((p) => p.routeId === route.id)?.points ??
-        route.stops.map((s) => s.coordinates)) as [number, number][];
-      let total = 0;
-      for (let i = 1; i < points.length; i++)
-        total += distanceMeters(points[i - 1], points[i]);
-      return {
-        ...vehicle,
-        phase:
-          (vehicle.phase +
-            ((Math.max(0, now - vehicle.updatedAt) / 1000) * vehicle.speedKmh) /
-              3.6 /
-              total) %
-          1,
-        updatedAt: now,
-      };
-    });
+    await ctx.db
+      .query("simulationState")
+      .withIndex("by_key", (q) => q.eq("key", "fleet-clock"))
+      .first();
+    const actors = await ctx.db.query("vehicles").collect(),
+      roads = await ctx.db.query("roadPaths").collect(),
+      network = fleetNetwork(roads),
+      now = Date.now();
+    return actors.map((actor) => projectFleetVehicle(actor, network, now));
   },
 });
-// Only operations are simulated. Shared server clock, never a user's precise location.
+export const offers = query({
+  args: {
+    from: v.string(),
+    to: v.string(),
+    routeId: v.optional(v.string()),
+    refreshBucket: v.optional(v.number()),
+  },
+  handler: async (ctx, a) => {
+    await ctx.db
+      .query("simulationState")
+      .withIndex("by_key", (q) => q.eq("key", "fleet-clock"))
+      .first();
+    const actors = await ctx.db.query("vehicles").collect(),
+      roads = await ctx.db.query("roadPaths").collect(),
+      network = fleetNetwork(roads),
+      now = Date.now(),
+      routes = matchingRoutes(a.from, a.to).filter(
+        (r) => !a.routeId || r.id === a.routeId,
+      );
+    const offers = [];
+    for (const route of routes)
+      for (const actor of actors) {
+        const home = commuteRoutes.find((r) => r.id === actor.routeId);
+        if (home?.mode !== route.mode || home.corridor !== route.corridor)
+          continue;
+        const offer = offerForRoute(
+          actor,
+          network,
+          route.id,
+          a.from,
+          a.to,
+          now,
+        );
+        if (offer) offers.push(offer);
+      }
+    return offers.sort((a, b) => a.pickupArrivesAt - b.pickupArrivesAt);
+  },
+});
 export const tick = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
+    if (!(await ctx.db.query("vehicles").first())) {
+      for (const route of commuteRoutes)
+        for (const [i, vehicle] of vehiclesFor(
+          route,
+          route.stops[0].id,
+          route.stops.at(-1)!.id,
+        ).entries())
+          await ctx.db.insert("vehicles", {
+            key: vehicle.id,
+            routeId: route.id,
+            label: vehicle.label.replace("Sample ", "Simulated "),
+            speedKmh: route.speedKmh,
+            occupancy: vehicle.occupancy,
+            phase: i * 0.24,
+            updatedAt: now,
+            scenarioEpoch: now,
+          });
+    }
     const waiting = await ctx.db
       .query("trips")
       .withIndex("by_status", (q) => q.eq("status", "waiting"))
       .collect();
-    const plans = await ctx.db
-      .query("plans")
-      .withIndex("by_leave", (q) =>
-        q.gte("leaveAt", now - 120000).lte("leaveAt", now),
-      )
-      .collect();
-    const existing = await ctx.db.query("vehicles").first();
-    // Avoid reading road geometry and writing the fleet all night when nobody is waiting.
-    if (existing && !waiting.length && !plans.some((p) => !p.reminded)) return;
-    const paths = await ctx.db.query("roadPaths").collect();
-    let vehicles = await ctx.db.query("vehicles").collect();
-    if (!vehicles.length) {
-      for (const r of commuteRoutes) {
-        for (const [i, v] of vehiclesFor(
-          r,
-          r.stops[0].id,
-          r.stops.at(-1)!.id,
-        ).entries()) {
-          await ctx.db.insert("vehicles", {
-            key: v.id,
-            routeId: r.id,
-            label: v.label.replace("Sample ", "Simulated "),
-            speedKmh: r.speedKmh,
-            occupancy: v.occupancy,
-            phase: i * 0.24,
-            updatedAt: now,
-          });
-        }
-      }
-      vehicles = await ctx.db.query("vehicles").collect();
-    }
-    const previousVehicles = new Map(
-      vehicles.map((v) => [v.key, { phase: v.phase, updatedAt: v.updatedAt }]),
+    const eligible = waiting.filter(
+      (t) => !t.runStartAt || t.runStartAt <= now,
     );
-    for (const vehicle of vehicles) {
-      const route = commuteRoutes.find((r) => r.id === vehicle.routeId)!;
-      const road = paths.find((p) => p.routeId === route.id);
-      const points = road?.points as [number, number][] | undefined;
-      let total = 0;
-      const geometry = points ?? route.stops.map((s) => s.coordinates);
-      for (let j = 1; j < geometry.length; j++)
-        total += distanceMeters(geometry[j - 1], geometry[j]);
-      const phase =
-        (vehicle.phase +
-          (Math.max(0, (now - vehicle.updatedAt) / 1000) * vehicle.speedKmh) /
-            3.6 /
-            total) %
-        1;
-      await ctx.db.patch(vehicle._id, { phase, updatedAt: now });
-      vehicle.phase = phase;
-    }
-    for (const t of waiting) {
-      if (t.notified) continue;
-      const vehicle = vehicles.find((v) => v.key === t.vehicleId),
-        r = commuteRoutes.find((r) => r.id === t.routeId);
-      if (!vehicle || !r) continue;
-      const road = paths.find((p) => p.routeId === r.id);
-      const points = (road?.points ?? r.stops.map((s) => s.coordinates)) as [
-        number,
-        number,
-      ][];
-      const pickup = r.stops.find((s) => s.id === t.pickupId)!;
-      const previous = previousVehicles.get(vehicle.key)!;
-      let routeLength = 0;
-      for (let j = 1; j < points.length; j++)
-        routeLength += distanceMeters(points[j - 1], points[j]);
-      const began = Math.max(t.createdAt, previous.updatedAt);
-      const previousPhase =
-        (previous.phase +
-          ((Math.max(0, began - previous.updatedAt) / 1000) *
-            vehicle.speedKmh) /
-            3.6 /
-            routeLength) %
-        1;
-      const travelled =
-        ((Math.max(0, now - began) / 1000) * vehicle.speedKmh) /
-        3.6 /
-        routeLength;
-      const remaining = sweptDistance(
-        points,
-        travelled >= 1 ? 0 : previousPhase,
-        travelled >= 1 ? 1 : vehicle.phase,
+    if (!eligible.length) return;
+    const actors = await ctx.db.query("vehicles").collect(),
+      roads = await ctx.db.query("roadPaths").collect(),
+      network = fleetNetwork(roads),
+      clock = await ctx.db
+        .query("simulationState")
+        .withIndex("by_key", (q) => q.eq("key", "fleet-clock"))
+        .first();
+    for (const original of eligible) {
+      let trip = original;
+      const actor = actors.find((a) => a.key === trip.vehicleId);
+      if (!actor) {
+        await endAbandonedTrip(
+          ctx,
+          trip,
+          "expired",
+          "The selected simulated vehicle is no longer available. Choose a new run.",
+        );
+        continue;
+      }
+      if (!trip.runId || trip.runOrdinal === undefined) {
+        const offer = offerForRoute(
+          actor,
+          network,
+          trip.routeId,
+          trip.pickupId,
+          trip.to,
+          now,
+        );
+        if (!offer) {
+          await endAbandonedTrip(
+            ctx,
+            trip,
+            "expired",
+            "The old simulated watch could not be resumed. Select a new run.",
+          );
+          continue;
+        }
+        const snapshot = {
+          runId: offer.runId,
+          runOrdinal: offer.runOrdinal,
+          runVersion: offer.runVersion,
+          runStartAt: offer.runStartAt,
+          runEndAt: offer.runEndAt,
+          pickupArrivesAt: offer.pickupArrivesAt,
+          pickupDepartsAt: offer.pickupDepartsAt,
+          destinationArrivesAt: offer.destinationArrivesAt,
+          expiryAt: offer.pickupDepartsAt + BOARDING_GRACE_SECONDS * 1000,
+          watchVersion: 1,
+        };
+        await ctx.db.patch(trip._id, snapshot);
+        trip = { ...trip, ...snapshot };
+        await ctx.scheduler.runAt(
+          Math.max(now, snapshot.expiryAt),
+          internal.trips.expire,
+          { id: trip._id, status: "waiting", expectedAt: snapshot.expiryAt },
+        );
+      }
+      const run = runAtOrdinal(actor, network, trip.runOrdinal!);
+      if (run.version !== trip.runVersion) {
+        await endAbandonedTrip(
+          ctx,
+          trip,
+          "expired",
+          "The simulated road route changed. Choose a fresh vehicle run.",
+        );
+        continue;
+      }
+      if (now > trip.pickupDepartsAt! + BOARDING_GRACE_SECONDS * 1000) {
+        await endAbandonedTrip(
+          ctx,
+          trip,
+          "missed",
+          "The selected run passed your pickup without boarding being recorded. Choose another vehicle; a new loop will not restart this trip.",
+        );
+        continue;
+      }
+      if (now < run.startAt) continue;
+      const pickup = run.leg.route.stops.find((s) => s.id === trip.pickupId)!;
+      const began = Math.max(
+          run.startAt,
+          trip.createdAt,
+          clock?.updatedAt ?? trip.createdAt,
+        ),
+        before = runMetersAt(run, began),
+        current = runMetersAt(run, now);
+      const pickupProgress = run.leg.stops.find(
+        (stop) => stop.id === trip.pickupId,
+      )!;
+      if (
+        current.meters > pickupProgress.meters + 30 &&
+        now > trip.pickupDepartsAt!
+      ) {
+        await endAbandonedTrip(
+          ctx,
+          trip,
+          "missed",
+          "The selected run passed your pickup without boarding being recorded. Select another vehicle run.",
+        );
+        continue;
+      }
+      if (trip.notified) continue;
+      const distance = sweptDistance(
+        run.leg.points,
+        before.meters / run.leg.meters,
+        current.meters / run.leg.meters,
         pickup.coordinates,
       );
-      if (remaining <= t.radius) {
-        await ctx.db.patch(t._id, { notified: true });
-        const p = await ctx.db
+      if (distance <= trip.radius) {
+        await ctx.db.patch(trip._id, { notified: true, notifiedAt: now });
+        const profile = await ctx.db
           .query("profiles")
-          .withIndex("by_user", (q) => q.eq("userId", t.userId))
+          .withIndex("by_user", (q) => q.eq("userId", trip.userId))
           .unique();
-        if (p?.nearbyAlerts !== false) {
-          const payload = {
-            kind: "proximity",
-            title: "Your simulated vehicle is nearby",
-            body: `It entered your ${t.radius} m pickup area. Get ready; boarding is not guaranteed.`,
-            href: "/commute/tracking",
-          };
-          await ctx.db.insert("notifications", {
-            ...payload,
-            userId: t.userId,
-            read: false,
-            createdAt: now,
-          });
-          await ctx.scheduler.runAfter(0, internal.push.send, {
-            ...payload,
-            userId: t.userId,
-            tripId: t._id,
-          });
+        if (profile?.nearbyAlerts !== false) {
+          const eventKey = `${trip._id}:${trip.runId}:${trip.watchVersion ?? 1}:proximity`;
+          if (
+            !(await ctx.db
+              .query("notifications")
+              .withIndex("by_event", (q) => q.eq("eventKey", eventKey))
+              .first())
+          ) {
+            const payload = {
+              kind: "proximity",
+              title: "Your simulated vehicle is nearby",
+              body: `It entered your ${trip.radius} m pickup area. Get ready; boarding is not guaranteed.`,
+              href: "/commute/tracking",
+            };
+            await ctx.db.insert("notifications", {
+              ...payload,
+              userId: trip.userId,
+              eventKey,
+              read: false,
+              createdAt: now,
+            });
+            await ctx.scheduler.runAfter(0, internal.push.send, {
+              ...payload,
+              userId: trip.userId,
+              tripId: trip._id,
+            });
+          }
         }
       }
     }
-    for (const p of plans)
-      if (
-        !p.revision &&
-        !p.reminded &&
-        p.leaveAt <= now &&
-        p.leaveAt > now - 120000
-      ) {
-        await ctx.db.patch(p._id, { reminded: true });
-        const payload = {
-          kind: "planner",
-          title: "Time to leave for class",
-          body: "Your saved departure time has arrived. Check current conditions before travelling.",
-          href: "/planner",
-        };
-        await ctx.db.insert("notifications", {
-          ...payload,
-          userId: p.userId,
-          read: false,
-          createdAt: now,
-        });
-        await ctx.scheduler.runAfter(0, internal.push.send, {
-          ...payload,
-          userId: p.userId,
-        });
-      }
+    if (clock)
+      await ctx.db.patch(clock._id, { updatedAt: now, version: FLEET_VERSION });
+    else
+      await ctx.db.insert("simulationState", {
+        key: "fleet-clock",
+        updatedAt: now,
+        version: FLEET_VERSION,
+      });
   },
 });
 

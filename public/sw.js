@@ -1,8 +1,10 @@
 /* No account pages, API responses, GPS, or map tiles are cached. */
-const CACHE="commutehub-shell-v1";
+const CACHE="commutehub-shell-v2";
 const SHELL=["/offline.html","/icons/icon-192.png","/icons/icon-512.png","/illustrations/nearby.svg"];
-self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));self.skipWaiting();});
+self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));});
 self.addEventListener("activate",event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener("fetch",event=>{const url=new URL(event.request.url);if(event.request.method!=="GET"||url.origin!==self.location.origin)return;if(event.request.mode==="navigate"){event.respondWith(fetch(event.request).catch(()=>caches.match("/offline.html")));return;}if(SHELL.includes(url.pathname)){event.respondWith(caches.match(event.request).then(hit=>hit||fetch(event.request)));}});
-self.addEventListener("push",event=>{let data={title:"CommuteHub",body:"You have a new commute alert.",href:"/alerts"};try{data={...data,...event.data.json()};}catch{}event.waitUntil(self.registration.showNotification(data.title,{body:data.body,icon:"/icons/icon-192.png",badge:"/icons/icon-192.png",tag:data.href,data:{href:data.href}}));});
+self.addEventListener("push",event=>{let data={title:"CommuteHub",body:"You have a new commute alert.",href:"/alerts"};try{data={...data,...event.data.json()};}catch{}event.waitUntil(self.registration.showNotification(data.title,{body:data.body,icon:"/icons/icon-192.png",badge:"/icons/icon-192.png",tag:data.eventId||data.href,data:{href:data.href}}));});
 self.addEventListener("notificationclick",event=>{event.notification.close();const href=event.notification.data?.href;const safe=typeof href==="string"&&href.startsWith("/")&&!href.startsWith("//")?href:"/alerts";event.waitUntil(self.clients.matchAll({type:"window",includeUncontrolled:true}).then(async clients=>{const existing=clients.find(c=>c.url.startsWith(self.location.origin));if(existing){await existing.navigate(safe);return existing.focus();}return self.clients.openWindow(safe);}));});
+
+self.addEventListener("message",event=>{if(event.data?.type==="ACTIVATE_UPDATE")self.skipWaiting();});

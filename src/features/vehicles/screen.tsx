@@ -1,8 +1,5 @@
 "use client";
-import {
-  cumulativeDistances,
-  distanceOnPath,
-} from "@/components/maps/road-path";
+import { useNow } from "@/lib/use-now";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/backend";
 import Link from "next/link";
@@ -24,7 +21,6 @@ import {
   occupancyLabel,
   place,
   routeLabel,
-  vehiclesFor,
 } from "@/lib/commute-catalog";
 import type { Vehicle } from "@/types/commute";
 import { Button } from "@/components/ui/button";
@@ -65,8 +61,7 @@ export function VehiclesScreen() {
   );
 }
 function VehicleSelection() {
-  const liveVehicles = useQuery(api.vehicles.list);
-  const roadPaths = useQuery(api.vehicles.paths);
+  const now = useNow();
   const demo = useDemo();
   const { search, preferences } = demo;
   const router = useRouter();
@@ -78,40 +73,20 @@ function VehicleSelection() {
     (r) => !selected || r.corridor === selected.corridor,
   );
   const filtered = eligible.filter((r) => mode === "any" || r.mode === mode);
-  const vehicles = filtered
-    .flatMap((r) => vehiclesFor(r, search.from, search.to))
-    .filter((v) => liveVehicles?.some((l) => l.key === v.id))
-    .map((v) => {
-      const live = liveVehicles!.find((l) => l.key === v.id)!;
-      const r = commuteRoutes.find((r) => r.id === v.routeId)!;
-      const points = (roadPaths?.find((p) => p.routeId === r.id)?.points ??
-        r.stops.map((s) => s.coordinates)) as [number, number][];
-      const distances = cumulativeDistances(points),
-        total = distances.at(-1) ?? 1;
-      const at = distanceOnPath(
-        points,
-        distances,
-        place(search.from)!.coordinates,
-      );
-      const remaining = (at - live.phase * total + total) % total;
-      return {
-        ...v,
-        label: live.label,
-        etaMinutes: Math.max(
-          1,
-          Math.ceil(remaining / (live.speedKmh / 3.6) / 60),
-        ),
-        speedKmh: live.speedKmh,
-        occupancy: live.occupancy as Vehicle["occupancy"],
-      };
-    })
-    .sort((a, b) => a.etaMinutes - b.etaMinutes);
+  const liveVehicles = useQuery(api.vehicles.offers, {
+    from: search.from,
+    to: search.to,
+    refreshBucket: Math.floor(now / 10000),
+  });
+  const vehicles = (liveVehicles ?? []).filter((v) =>
+    filtered.some((r) => r.id === v.routeId),
+  );
   const detailsRoute = details
     ? commuteRoutes.find((r) => r.id === details.routeId)
     : null;
   const select = (v: Vehicle) => {
     demo.chooseRoute(v.routeId);
-    demo.chooseVehicle(v.id);
+    demo.chooseVehicle(v.id, v.runId);
     router.push("/commute/pickup");
   };
   const modeChoices = [
@@ -201,13 +176,13 @@ function VehicleSelection() {
                 <Badge variant="secondary">{modeLabel(v.mode)}</Badge>
                 <span className="flex items-center gap-1 text-sm font-semibold tabular-nums">
                   <Clock3 className="size-4" aria-hidden="true" />
-                  {v.etaMinutes} min
+                  {v.etaMinutes === 0 ? "Arriving" : `${v.etaMinutes} min`}
                 </span>
               </div>
               <CardTitle>{v.label}</CardTitle>
               <CardDescription>
                 {routeLabel(commuteRoutes.find((r) => r.id === v.routeId)!)} ·
-                sample run
+                simulated run
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
@@ -227,6 +202,12 @@ function VehicleSelection() {
                 <span className="text-xs font-normal text-muted-foreground">
                   {preferences.student ? "student" : "regular"} estimate
                 </span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {v.passengers === null
+                  ? "Passenger count unknown"
+                  : `${v.passengers}/${v.capacity} simulated passengers`}
+                {v.scheduled ? " · Upcoming run" : " · On this directional run"}
               </p>
               {v.occupancy === "full" && (
                 <p className="text-xs text-muted-foreground">

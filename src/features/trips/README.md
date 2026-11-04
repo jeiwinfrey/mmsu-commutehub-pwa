@@ -10,6 +10,6 @@ Edit `screen.tsx` and add feature-only components under `components/`. Keep the 
 
 ## Current implementation
 
-Active trips come from `convex/trips.ts`; terminal history is paginated. Ride again opens a fresh vehicle search without restarting the historical vehicle. History deletion is owner-scoped and requires a confirmation; active trips must first be finished or cancelled.
+Active trips come from `convex/trips.ts`; completed/cancelled/missed/expired history is paginated. `/trips/[id]` provides refresh-safe, owner-authorized details. Ride again opens a fresh vehicle search without restarting the historical vehicle. History deletion is owner-scoped and requires a confirmation; active trips must first be finished or cancelled.
 
 The functional-app request supersedes the original UI-only restrictions. The member TODO preserves the initial UI assignment. Read `docs/implementation-status.md` and `docs/completion-audit.md` for current verification and remaining release work. Use free services only.

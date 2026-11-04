@@ -8,6 +8,6 @@ Start with [your TODO](../../../docs/todos/chadrick-profile.md) and [design guid
 
 Edit `screen.tsx` and add feature-only components under `components/`. Keep the route page thin. Add `"use client"` only to components needing local interactions.
 
-Coordinate preference vocabulary with Onboarding. No identity, deletion API, storage, or PWA setup.
+## Current implementation
 
-UI-only milestone: use fixtures and local state; no external services, permissions, persistent storage, or PWA setup. Shared changes require coordination.
+Account preferences persist through owner-checked Convex mutations: name, supported campus, mode, student fare, default pickup radius, proximity/community/departure alert preferences. Onboarding replay and device setup remain explicit actions. Saved routes, sign-out notification cleanup and typed account deletion are connected. The functional-app request supersedes the original UI-only restrictions; use free services only.

@@ -4,7 +4,7 @@ A mobile-first commuter PWA built with **Next.js App Router, TypeScript, Tailwin
 
 The current implementation connects sign-in, preferences, saved routes, trip history, departure plans, community reports, and alerts to a shared Convex database. Vehicle operations are simulated. Terminal coordinates and fare tariffs are illustrative and require local verification. No seats are reserved or tickets sold.
 
-**Free services only. Do not start subscriptions, trials, paid plans, or purchases.** Authentication currently uses a Clerk development instance; ownership claiming and production credentials need the account owner's approval. See [implementation status](docs/implementation-status.md) and [completion audit](docs/completion-audit.md) for verified checks and remaining release work.
+**Free services only. Do not start subscriptions, trials, paid plans, or purchases.** Authentication currently uses a Clerk development instance; the owner approved claiming it and storing this app’s development credentials in the named Vercel Hobby project. Those steps are waiting for local browser access to be enabled. Production credentials remain a separate setup task. See [implementation status](docs/implementation-status.md) and [completion audit](docs/completion-audit.md) for verified checks and remaining release work.
 
 ## Before you start coding
 
@@ -61,8 +61,8 @@ Browser integration tests use a dedicated Clerk **development** test account und
 Welcome/sign-in → onboarding → route → vehicle and fare → pickup and radius → tracking → boarding → completion. Five navigation destinations: Commute, Planner, Trips, Community, Profile. The header bell opens Alerts.
 
 - Account data persists in Convex and is scoped to the authenticated Clerk subject.
-- Shared simulated vehicles update server-side every 15 seconds. OSRM geometry is seeded once and reused; OpenStreetMap tiles retain attribution.
-- Pickup proximity and departure reminders create account alerts. Background delivery requires explicit browser notification permission and configured VAPID keys.
+- Simulated vehicles follow continuous outbound/return runs with stop dwell; the server checks waiting trips every ten seconds. OSRM geometry is seeded once and reused; OpenStreetMap tiles retain attribution.
+- Pickup proximity and departure reminders create account alerts. Background delivery requires explicit browser notification permission and configured VAPID keys. Missed runs close automatically; trip details have refresh-safe links. Push uses bounded retries and per-device attempt records.
 - PWA installation includes an offline information page. Private account pages, API responses, and map tiles are not cached.
 - Manual pickup works without GPS. Find my nearest stop uses coordinates only in the browser.
 

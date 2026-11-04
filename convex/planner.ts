@@ -110,6 +110,11 @@ export const remind = internalMutation({
     )
       return;
     await ctx.db.patch(id, { reminded: true });
+    const profile = await ctx.db
+      .query("profiles")
+      .withIndex("by_user", (q) => q.eq("userId", p.userId))
+      .unique();
+    if (profile?.departureAlerts === false) return;
     const payload = {
       kind: "planner",
       title: "Time to leave for class",

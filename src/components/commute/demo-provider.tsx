@@ -1,6 +1,7 @@
 "use client";
 import { useSessionState } from "@/lib/use-session-state";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
+import { useOnlineMutation as useMutation } from "@/lib/use-online-mutation";
 import { api, errorMessage } from "@/lib/backend";
 import { toast } from "sonner";
 import { createContext, useContext, useState } from "react";
@@ -11,6 +12,8 @@ export type Preferences = {
   mode: TransportMode | "any";
   student: boolean;
   nearbyAlerts: boolean;
+  defaultRadius?: number;
+  departureAlerts?: boolean;
 };
 type Search = { from: string; to: string; mode?: TransportMode };
 export type Watch = {
@@ -27,7 +30,8 @@ type DemoContextValue = {
   routeId: string | null;
   vehicleId: string | null;
   chooseRoute: (id: string) => void;
-  chooseVehicle: (id: string) => void;
+  chooseVehicle: (id: string, runId?: string) => void;
+  runId: string | null;
   pickup: PickupSelection | null;
   setPickup: (value: PickupSelection) => void;
   watch: Watch | null;
@@ -53,6 +57,8 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
         mode: profile.mode as Preferences["mode"],
         student: profile.student,
         nearbyAlerts: profile.nearbyAlerts,
+        defaultRadius: profile.defaultRadius ?? 500,
+        departureAlerts: profile.departureAlerts ?? true,
       }
     : localPreferences;
   const setPreferences = (value: Preferences) => {
@@ -61,6 +67,9 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       void save({
         ...value,
         communityAlerts: profile?.communityAlerts ?? true,
+        defaultRadius: value.defaultRadius ?? profile?.defaultRadius ?? 500,
+        departureAlerts:
+          value.departureAlerts ?? profile?.departureAlerts ?? true,
         onboarded: true,
       }).catch((e) => toast.error(errorMessage(e)));
   };
@@ -68,26 +77,35 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     search: Search;
     routeId: string | null;
     vehicleId: string | null;
+    runId: string | null;
     pickup: PickupSelection | null;
   }>("commutehub-selection", {
     search: { from: "laoag", to: "mmsu" },
     routeId: null,
     vehicleId: null,
+    runId: null,
     pickup: null,
   });
-  const { search, routeId, vehicleId, pickup } = draft;
+  const { search, routeId, vehicleId, pickup, runId } = draft;
   const [watch, setWatch] = useState<Watch | null>(null);
   const setSearch = (search: Search) =>
-    setDraft({ search, routeId: null, vehicleId: null, pickup: null });
+    setDraft({
+      search,
+      routeId: null,
+      vehicleId: null,
+      runId: null,
+      pickup: null,
+    });
   const chooseRoute = (routeId: string) =>
     setDraft((current) => ({
       ...current,
       routeId,
       vehicleId: null,
+      runId: null,
       pickup: null,
     }));
-  const chooseVehicle = (vehicleId: string) =>
-    setDraft((current) => ({ ...current, vehicleId }));
+  const chooseVehicle = (vehicleId: string, runId?: string) =>
+    setDraft((current) => ({ ...current, vehicleId, runId: runId ?? null }));
   const setPickup = (pickup: PickupSelection) =>
     setDraft((current) => ({ ...current, pickup }));
   const startWatch = () => {
@@ -103,6 +121,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
         setSearch,
         routeId,
         vehicleId,
+        runId: runId ?? null,
         chooseRoute,
         chooseVehicle,
         pickup,

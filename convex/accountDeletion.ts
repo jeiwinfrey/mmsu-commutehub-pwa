@@ -28,6 +28,7 @@ export const removeMyData = mutation({
       await ctx.db.delete(r._id);
     }
     for (const table of [
+      "deliveryAttempts",
       "profiles",
       "savedRoutes",
       "trips",

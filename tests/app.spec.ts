@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api";
 import { test, expect } from "@playwright/test";
@@ -102,6 +103,10 @@ test("signed-in preferences, trip lifecycle, and planner persist in the real dat
   await expect(page.getByLabel("Display name")).toBeVisible({ timeout: 30000 });
   await page.getByLabel("Display name").fill("QA Commuter");
   await page
+    .getByRole("combobox", { name: "Default pickup alert radius" })
+    .click();
+  await page.getByRole("option", { name: "250 m", exact: true }).click();
+  await page
     .getByRole("button", { name: "Save preferences", exact: true })
     .click();
   await expect(
@@ -109,6 +114,9 @@ test("signed-in preferences, trip lifecycle, and planner persist in the real dat
   ).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Display name")).toHaveValue("QA Commuter");
+  await expect(
+    page.getByRole("combobox", { name: "Default pickup alert radius" }),
+  ).toContainText("250 m");
   await page.goto("/trips");
   await expect(page.getByRole("heading", { name: /Every ride/ })).toBeVisible();
   await expect(page.locator('[data-slot="skeleton"]')).toHaveCount(0);
@@ -133,6 +141,9 @@ test("signed-in preferences, trip lifecycle, and planner persist in the real dat
     .first()
     .click();
   await page.getByRole("button", { name: "Use this pickup" }).click();
+  await expect(
+    page.getByRole("radio", { name: "250 m", exact: true }),
+  ).toBeChecked();
   await page.getByRole("button", { name: "Confirm pickup and radius" }).click();
   await page
     .getByRole("button", { name: "Start tracking this vehicle" })
@@ -166,6 +177,9 @@ test("signed-in preferences, trip lifecycle, and planner persist in the real dat
     .getByRole("button", { name: "Trip details", exact: true })
     .first()
     .click();
+  await expect(page).toHaveURL(/trips\//);
+  await page.reload();
+  await expect(page.getByText("Fare snapshot", { exact: true })).toBeVisible();
   await page
     .getByRole("button", { name: "Delete trip from history", exact: true })
     .click();
@@ -372,4 +386,125 @@ test("dedicated disposable account deletion clears app data and authentication",
   await expect(
     page.getByRole("link", { name: "Sign in or create an account" }),
   ).toBeVisible({ timeout: 20000 });
+});
+
+test("offline account edits remain a draft and are never silently submitted on reconnect", async ({
+  page,
+  context,
+}) => {
+  await page.goto("/commute");
+  await clerk.signIn({
+    page,
+    emailAddress: "commutehub-qa+clerk_test@example.com",
+  });
+  await page.goto("/profile");
+  await expect(page.getByLabel("Display name")).toBeVisible({ timeout: 30000 });
+  await page.getByLabel("Display name").fill("Connected QA");
+  await page
+    .getByRole("button", { name: "Save preferences", exact: true })
+    .click();
+  await expect(
+    page.getByText("Preferences saved", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Display name").fill("Unsent offline draft");
+  await context.setOffline(true);
+  await page
+    .getByRole("button", { name: "Save preferences", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "You’re offline or reconnecting. Your draft is still here; reconnect and submit it yourself.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByLabel("Display name")).toHaveValue(
+    "Unsent offline draft",
+  );
+  await context.setOffline(false);
+  await page.reload();
+  await expect(page.getByLabel("Display name")).toHaveValue("Connected QA", {
+    timeout: 20000,
+  });
+});
+
+test("PWA updates wait for an explicit reload and keep the user's current page", async ({
+  page,
+  baseURL,
+}) => {
+  let version = "qa-v1";
+  const proxy = createServer(async (request, response) => {
+    try {
+      if (request.url?.startsWith("/sw.js")) {
+        response.writeHead(200, {
+          "Content-Type": "application/javascript",
+          "Service-Worker-Allowed": "/",
+          "Cache-Control": "no-store",
+        });
+        response.end(
+          `const version=${JSON.stringify(version)};self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));self.addEventListener('message',event=>{if(event.data?.type==='ACTIVATE_UPDATE')self.skipWaiting();});`,
+        );
+        return;
+      }
+      const upstream = await fetch(new URL(request.url ?? "/", baseURL), {
+        redirect: "manual",
+        headers: {
+          accept: request.headers.accept ?? "*/*",
+          cookie: request.headers.cookie ?? "",
+          host: request.headers.host ?? "localhost",
+          "x-forwarded-host": request.headers.host ?? "localhost",
+          "x-forwarded-proto": "http",
+        },
+      });
+      const headers = Object.fromEntries(upstream.headers);
+      delete headers["content-encoding"];
+      delete headers["content-length"];
+      delete headers["transfer-encoding"];
+      const responseHeaders: Record<string, string | string[]> = { ...headers };
+      const cookies = upstream.headers.getSetCookie();
+      if (cookies.length) responseHeaders["set-cookie"] = cookies;
+      response.writeHead(upstream.status, responseHeaders);
+      response.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch {
+      response.writeHead(502);
+      response.end("Test proxy failed");
+    }
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+  const address = proxy.address();
+  if (!address || typeof address === "string")
+    throw new Error("Test proxy did not start");
+  try {
+    await page.goto(`http://localhost:${address.port}/commute`);
+    await expect(page).toHaveURL(`http://localhost:${address.port}/commute`);
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.reload();
+    await expect(page).toHaveURL(`http://localhost:${address.port}/commute`);
+    version = "qa-v2";
+    await page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration();
+      await registration!.update();
+    });
+    await expect(
+      page.getByText("CommuteHub has an update", { exact: true }),
+    ).toBeVisible({ timeout: 15000 });
+    await expect(page).toHaveURL(/commute/);
+    await page.getByRole("button", { name: "Later", exact: true }).click();
+    await expect(
+      page.getByText("CommuteHub has an update", { exact: true }),
+    ).not.toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByText("CommuteHub has an update", { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Update and reload", exact: true })
+      .click();
+    await expect(
+      page.getByText("CommuteHub has an update", { exact: true }),
+    ).not.toBeVisible({ timeout: 15000 });
+    await expect(page).toHaveURL(/commute/);
+  } finally {
+    proxy.closeAllConnections();
+    await new Promise<void>((resolve) => proxy.close(() => resolve()));
+  }
 });

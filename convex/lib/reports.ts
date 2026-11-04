@@ -9,7 +9,8 @@ export async function presentReport(
     .query("confirmations")
     .withIndex("by_report", (q) => q.eq("reportId", report._id))
     .collect();
-  const { userId, ...safe } = report;
+  const { userId, retentionHold: _retentionHold, ...safe } = report;
+  void _retentionHold;
   return {
     ...safe,
     mine: subject === userId,

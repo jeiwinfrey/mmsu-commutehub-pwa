@@ -28,7 +28,7 @@ Unsaved route/vehicle/pickup selections use browser session storage to survive O
 
 ## Simulation and maps
 
-Convex checks every 15 seconds and advances the shared simulated fleet while trips are waiting or reminders are due. When idle, it avoids geometry reads/fleet writes; list queries project the shared clock forward. A vehicle's phase advances by speed along stored geometry. `vehicles.seedPaths` fetches OSRM road paths sequentially, spaced at least 1.2 seconds apart, and saves the result; regular ticks do not call OSRM. Both directions are distinct simulated services. No real operator feeds are implied. Failed route seeding falls back to a labeled schematic.
+`src/lib/fleet-simulation.ts` computes deterministic round trips from a fixed epoch and staggered vehicle slots. Outbound and inbound road geometries meet at the terminal; vehicles dwell there for 60 seconds and at intermediate stops for 20 seconds. Each directional leg has a distinct run ID, ordinal, geometry revision, and start/end time. Queries project the same server clock; the ten-second cron evaluates eligible waiting trips without rewriting all vehicle records on every tick. Vehicle-list queries refresh on a ten-second bucket and keep future-run availability separate from the current run. Stored OSRM geometry is fetched once and reused; routine simulation does not call OSRM. These fictional operations do not imply an operator feed.
 
 Leaflet displays OpenStreetMap tiles and attribution. Map tiles are not cached by the service worker. A selectable stop list remains available when map tiles fail. Proximity checks the travelled road segments against the fixed pickup coordinate, including crossings between ticks; an account alert is created once per waiting trip. No geofencing of the student's phone is required.
 
@@ -36,7 +36,7 @@ Leaflet displays OpenStreetMap tiles and attribution. Map tiles are not cached b
 
 Convex internal jobs create account alerts and send Web Push using VAPID. Device permission is opt-in. Expired push endpoints are pruned. Sign-out unregisters the current device endpoint. Community alerts apply to saved routes; planner reminders apply to saved departure times.
 
-`manifest.ts` and icons support installation. `public/sw.js` caches only public shell assets and an offline information page. It never caches private pages, auth/API responses, or map tiles. Disconnected writes remain pending until the connection recovers; they are never marked saved before the server acknowledges them.
+`manifest.ts` and icons support installation. `public/sw.js` caches only public shell assets and an offline information page. It never caches private pages, auth/API responses, or map tiles. Critical UI mutations check both browser online state and the current Convex connection before starting. A disconnected submission is rejected with an explicit draft/retry message instead of being queued for automatic submission. In-flight operations still require server acknowledgement before success.
 
 `DELETE /api/account` checks origin and authenticated identity, removes that user's application data, then deletes the Clerk account. It is triggered only through a typed confirmation in Profile. Service credentials are server-only and ignored by Git.
 
@@ -47,3 +47,11 @@ The planner uses stored OSRM geometry, explicit simulated terminal service windo
 Trips and community feeds paginate independently of active-trip state. Historical trip deletion is owner-scoped and requires a confirmation. Ride again and Use this route create a new draft search, never a restart of a historical vehicle.
 
 Community report cards and alerts read the same report ID. Alerts resolve current content, resolution, and expiry rather than displaying an editable stale copy. Report links query by ID, independent of feed pagination. Eligibility includes saved routes, active trips, and future saved plans. Fanout is idempotent per recipient/report; community device push is limited to one per route per 15 minutes. Queues/traffic expire after 60 minutes, crowding after 15, and service/safety after 120. Report creation is limited to three in ten minutes.
+
+## Run-scoped trips and delivery
+
+Trip creation revalidates the exact selected run and stop order, snapshots run times/geometry/tariff version, and schedules waiting expiry. A missed pickup closes that watch; a later circuit cannot revive it. Boarding invalidates waiting expiry and schedules a twelve-hour abandoned-trip limit. A simulated destination event prompts user confirmation and never completes a trip automatically. Deep links use `/trips/[id]` and authorize the owner on the server.
+
+Push delivery uses `deliveryAttempts` keyed by event and device registration. A transactional claim prevents duplicate successful sends and stale retry completions. Transient failures retry at bounded backoff within proximity TTL (two minutes) or general TTL (five minutes), at most four attempts; 404/410 registrations are pruned. `sent` records transport acceptance only, never viewing. Event IDs become service-worker notification tags.
+
+The daily bounded retention job removes delivery attempts after 30 days, inbox items after 90 days, and unflagged reports 90 days after expiry. Reports with flags are retained for review. Exact student GPS is never persisted; trip history retains named candidate stops. Provider backups follow provider policies separately.

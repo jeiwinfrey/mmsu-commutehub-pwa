@@ -20,6 +20,8 @@ export const save = mutation({
     mode: v.string(),
     student: v.boolean(),
     nearbyAlerts: v.boolean(),
+    departureAlerts: v.optional(v.boolean()),
+    defaultRadius: v.optional(v.number()),
     communityAlerts: v.boolean(),
     onboarded: v.boolean(),
   },
@@ -31,6 +33,15 @@ export const save = mutation({
       )
     )
       throw new ConvexError("Invalid transport mode.");
+    if (
+      args.defaultRadius !== undefined &&
+      ![100, 250, 500, 1000].includes(args.defaultRadius)
+    )
+      throw new ConvexError("Choose a supported alert radius.");
+    if (args.campus !== "MMSU Batac Main Campus")
+      throw new ConvexError(
+        "This campus does not have a supported route connection yet.",
+      );
     const data = {
       ...args,
       name: text(args.name, 1, 50, "Name"),

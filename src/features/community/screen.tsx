@@ -3,12 +3,8 @@ import { useNow } from "@/lib/use-now";
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  useConvexAuth,
-  useMutation,
-  useQuery,
-  usePaginatedQuery,
-} from "convex/react";
+import { useConvexAuth, useQuery, usePaginatedQuery } from "convex/react";
+import { useOnlineMutation as useMutation } from "@/lib/use-online-mutation";
 import { api, errorMessage, localDate, type Id } from "@/lib/backend";
 import { commuteRoutes, routeLabel } from "@/lib/commute-catalog";
 import { Intro, SelectField, Notice } from "@/components/commute/ui";

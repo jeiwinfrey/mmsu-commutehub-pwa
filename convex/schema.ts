@@ -1,6 +1,30 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 export default defineSchema({
+  deliveryAttempts: defineTable({
+    userId: v.string(),
+    eventKey: v.string(),
+    subscriptionId: v.id("pushSubscriptions"),
+    status: v.union(
+      v.literal("sending"),
+      v.literal("sent"),
+      v.literal("retry"),
+      v.literal("failed"),
+    ),
+    attempt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+    statusCode: v.optional(v.number()),
+  })
+    .index("by_event_subscription", ["eventKey", "subscriptionId"])
+    .index("by_user", ["userId"])
+    .index("by_created", ["createdAt"]),
+  simulationState: defineTable({
+    key: v.string(),
+    updatedAt: v.number(),
+    version: v.string(),
+  }).index("by_key", ["key"]),
   profiles: defineTable({
     userId: v.string(),
     name: v.string(),
@@ -8,6 +32,8 @@ export default defineSchema({
     mode: v.string(),
     student: v.boolean(),
     nearbyAlerts: v.boolean(),
+    departureAlerts: v.optional(v.boolean()),
+    defaultRadius: v.optional(v.number()),
     communityAlerts: v.boolean(),
     onboarded: v.boolean(),
   }).index("by_user", ["userId"]),
@@ -23,6 +49,8 @@ export default defineSchema({
   }).index("by_route", ["routeId"]),
   vehicles: defineTable({
     key: v.string(),
+    scenarioEpoch: v.optional(v.number()),
+    scenarioOffsetSeconds: v.optional(v.number()),
     routeId: v.string(),
     label: v.string(),
     speedKmh: v.number(),
@@ -36,6 +64,20 @@ export default defineSchema({
     userId: v.string(),
     routeId: v.string(),
     vehicleId: v.string(),
+    runId: v.optional(v.string()),
+    runOrdinal: v.optional(v.number()),
+    runVersion: v.optional(v.string()),
+    runStartAt: v.optional(v.number()),
+    runEndAt: v.optional(v.number()),
+    pickupArrivesAt: v.optional(v.number()),
+    pickupDepartsAt: v.optional(v.number()),
+    destinationArrivesAt: v.optional(v.number()),
+    watchVersion: v.optional(v.number()),
+    notifiedAt: v.optional(v.number()),
+    arrivalDetectedAt: v.optional(v.number()),
+    expiryAt: v.optional(v.number()),
+    endReason: v.optional(v.string()),
+    fareVersion: v.optional(v.string()),
     from: v.string(),
     to: v.string(),
     pickupId: v.string(),
@@ -47,6 +89,8 @@ export default defineSchema({
       v.literal("riding"),
       v.literal("completed"),
       v.literal("cancelled"),
+      v.literal("missed"),
+      v.literal("expired"),
     ),
     notified: v.boolean(),
     createdAt: v.number(),
@@ -94,8 +138,10 @@ export default defineSchema({
     updatedAt: v.number(),
     expiresAt: v.number(),
     resolved: v.boolean(),
+    retentionHold: v.optional(v.boolean()),
   })
     .index("by_time", ["createdAt"])
+    .index("by_expiry", ["expiresAt"])
     .index("by_user", ["userId"]),
   confirmations: defineTable({ userId: v.string(), reportId: v.id("reports") })
     .index("by_report", ["reportId"])
@@ -104,9 +150,12 @@ export default defineSchema({
     userId: v.string(),
     reportId: v.id("reports"),
     reason: v.string(),
-  }).index("by_user_report", ["userId", "reportId"]),
+  })
+    .index("by_user_report", ["userId", "reportId"])
+    .index("by_report", ["reportId"]),
   notifications: defineTable({
     userId: v.string(),
+    eventKey: v.optional(v.string()),
     kind: v.string(),
     title: v.string(),
     body: v.string(),
@@ -116,7 +165,10 @@ export default defineSchema({
     read: v.boolean(),
     createdAt: v.number(),
   })
+    .index("by_event", ["eventKey"])
     .index("by_user", ["userId"])
+    .index("by_created", ["createdAt"])
+    .index("by_report", ["reportId"])
     .index("by_user_read", ["userId", "read"])
     .index("by_user_report", ["userId", "reportId"])
     .index("by_user_route_time", ["userId", "routeId", "createdAt"]),

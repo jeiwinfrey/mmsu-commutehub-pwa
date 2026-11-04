@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useMutation } from "convex/react";
+import { useOnlineMutation as useMutation } from "@/lib/use-online-mutation";
 import { api, errorMessage } from "@/lib/backend";
 import { Button } from "@/components/ui/button";
 export function NotificationSetup() {

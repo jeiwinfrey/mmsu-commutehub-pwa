@@ -24,3 +24,7 @@ To test a production build locally: `npm run build`, `npm run start -- --port 30
 - [OpenStreetMap tile policy](https://operations.osmfoundation.org/policies/tiles/)
 
 Public OSRM/OSM services have no application-specific SLA. Do not prefetch maps, cache tiles offline, or repeatedly reseed routes. Use an appropriately licensed provider or self-hosted routing for higher volume after separate approval.
+
+## This workspace’s approved deployment
+
+The owner approved Clerk CLI access for `jeiwinfreyulep12@gmail.com` in “Jeiwinfrey’s Organization,” plus storage of this app’s development Clerk secret/configuration in the Vercel Hobby project `mmsu-commutehub-pwa` under `jeiwinfrey’s projects`. Do not ask for the same approval again. Browser use currently reports disabled in Work settings; finish authorization and deployment when that capability is restored. No paid plan or trial is authorized.

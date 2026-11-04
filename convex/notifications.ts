@@ -234,6 +234,7 @@ export const deliveryAllowed = internalQuery({
         !p ||
         p.userId !== a.userId ||
         p.revision !== a.revision ||
+        profile?.departureAlerts === false ||
         !p.reminded
       )
         return false;

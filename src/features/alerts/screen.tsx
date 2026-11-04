@@ -2,7 +2,8 @@
 import { useNow } from "@/lib/use-now";
 import Link from "next/link";
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
+import { useOnlineMutation as useMutation } from "@/lib/use-online-mutation";
 import { api, errorMessage, localDate } from "@/lib/backend";
 import { AccountRequired } from "@/components/commute/account-required";
 import { Intro, SelectField } from "@/components/commute/ui";

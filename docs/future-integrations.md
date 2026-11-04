@@ -4,7 +4,7 @@ The earlier UI-only deferral is superseded by the functional-app request. Clerk,
 
 Remaining release work:
 
-- [ ] Claim Clerk development application with the owner's approved account permissions.
+- [ ] Complete the approved Clerk development-application claim once local browser use is enabled.
 - [ ] Configure a production Clerk instance and Google OAuth credentials/domains without paid enrollment.
 - [ ] Deploy and verify the HTTPS application against a production Convex deployment.
 - [ ] Verify installed PWA behavior and background push on real iOS/Android devices.

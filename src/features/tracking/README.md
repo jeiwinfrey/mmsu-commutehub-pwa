@@ -12,6 +12,6 @@ Consume shared fixture vehicle/pickup types; coordinate boarding handoff with Tr
 
 ## Current implementation
 
-Tracking loads the persisted active trip and shared simulated vehicle. Map motion is projected from the server clock, including while riding; estimates are withheld when the Convex connection is interrupted. Proximity checks sweep the travelled road between ticks and create one event per waiting trip.
+Tracking follows a persisted directional run snapshot, with continuous outbound/return road movement, terminal/intermediate dwell, ETA based on scheduled pickup time, and fixed-stop geofence events. A missed pickup closes the watch instead of resuming on another circuit. Boarding prevents waiting expiry; simulated destination arrival prompts manual completion. Abandoned rides expire after twelve hours. The map projects the shared deterministic clock and withholds confident estimates when server heartbeat or connection is stale.
 
-The functional-app request supersedes the original UI-only restrictions. The member TODO preserves the initial UI assignment. Read `docs/implementation-status.md` and `docs/completion-audit.md` for current verification and remaining release work. Use free services only.
+The functional-app request supersedes the original UI-only restrictions. Read `docs/implementation-status.md` and `docs/completion-audit.md` for current evidence. Use free services only.

@@ -1,7 +1,9 @@
 "use client";
+import { useNow } from "@/lib/use-now";
 import Link from "next/link";
 import { useState } from "react";
-import { useConvexAuth, useMutation } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
+import { useOnlineMutation as useMutation } from "@/lib/use-online-mutation";
 import { api, errorMessage } from "@/lib/backend";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -23,7 +25,6 @@ import {
   modeLabel,
   money,
   routeLabel,
-  vehiclesFor,
 } from "@/lib/commute-catalog";
 import type { DemoRoute } from "@/lib/commute-catalog";
 import type { PickupSelection, Vehicle } from "@/types/commute";
@@ -51,19 +52,31 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function PickupScreen() {
+  const now = useNow();
   const demo = useDemo();
   const route = commuteRoutes.find((r) => r.id === demo.routeId);
-  const vehicle = route
-    ? vehiclesFor(route, demo.search.from, demo.search.to).find(
-        (v) => v.id === demo.vehicleId,
-      )
-    : undefined;
+  const offers = useQuery(api.vehicles.offers, {
+    from: demo.search.from,
+    to: demo.search.to,
+    refreshBucket: Math.floor(now / 10000),
+    routeId: demo.routeId ?? undefined,
+  });
+  const vehicle = offers?.find(
+    (v) => v.id === demo.vehicleId && (!demo.runId || v.runId === demo.runId),
+  );
+  if (offers === undefined)
+    return (
+      <div role="status">
+        <Skeleton className="h-48" />
+        <p>Checking the selected vehicle run…</p>
+      </div>
+    );
   if (!route || !vehicle)
     return (
       <div className="feature-stack">
         <Intro
           title="Choose your ride first"
-          description="Select a route and vehicle before setting your pickup."
+          description="Select an available directional run before setting your pickup. If it has passed, choose a different run."
         />
         <Empty>
           <EmptyHeader>
@@ -104,7 +117,9 @@ function PickupJourney({
       : (candidates[0]?.id ?? ""),
   );
   const [radius, setRadius] = useState<PickupSelection["radiusMeters"]>(
-    demo.pickup?.radiusMeters ?? 500,
+    demo.pickup?.radiusMeters ??
+      ((demo.preferences.defaultRadius ??
+        500) as PickupSelection["radiusMeters"]),
   );
   const [locationStatus, setLocationStatus] = useState("");
   const locate = () => {
@@ -176,6 +191,7 @@ function PickupJourney({
       await startTrip({
         routeId: route.id,
         vehicleId: vehicle.id,
+        runId: demo.runId ?? undefined,
         from: demo.search.from,
         to: demo.search.to,
         pickupId: stopId,

@@ -1,7 +1,9 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { useClerk, useUser } from "@clerk/nextjs";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
+import { useOnlineMutation as useMutation } from "@/lib/use-online-mutation";
 import { api, errorMessage } from "@/lib/backend";
 import { AccountRequired } from "@/components/commute/account-required";
 import { InstallApp } from "@/components/commute/pwa";
@@ -143,6 +145,9 @@ function Profile() {
         </CardContent>
       </Card>
       <InstallApp />
+      <Button asChild variant="outline">
+        <Link href="/onboarding">Review onboarding and permissions</Link>
+      </Button>
       <Notice title="Your location stays yours">
         Manual pickup selection is always available. If you use Find me, your
         coordinates stay in the browser and are not stored in your profile.
@@ -244,6 +249,8 @@ type ProfileData = {
   mode: string;
   student: boolean;
   nearbyAlerts: boolean;
+  departureAlerts?: boolean;
+  defaultRadius?: number;
   communityAlerts: boolean;
   onboarded: boolean;
 };
@@ -262,6 +269,8 @@ function ProfileForm({
     mode: initial.mode,
     student: initial.student,
     nearbyAlerts: initial.nearbyAlerts,
+    departureAlerts: initial.departureAlerts ?? true,
+    defaultRadius: initial.defaultRadius ?? 500,
     communityAlerts: initial.communityAlerts,
     onboarded: initial.onboarded,
   });
@@ -285,6 +294,26 @@ function ProfileForm({
         />
       </div>
       <SelectField
+        id="profile-campus"
+        label="Destination campus"
+        value={p.campus}
+        onChange={(campus) => setP({ ...p, campus })}
+        options={[
+          { value: "MMSU Batac Main Campus", label: "MMSU Batac Main Campus" },
+        ]}
+        description="Additional campuses need verified transport connections."
+      />
+      <SelectField
+        id="profile-radius"
+        label="Default pickup alert radius"
+        value={String(p.defaultRadius ?? 500)}
+        onChange={(radius) => setP({ ...p, defaultRadius: Number(radius) })}
+        options={[100, 250, 500, 1000].map((radius) => ({
+          value: String(radius),
+          label: radius === 1000 ? "1 km" : `${radius} m`,
+        }))}
+      />
+      <SelectField
         id="profile-mode"
         label="Preferred transportation"
         value={p.mode}
@@ -300,6 +329,7 @@ function ProfileForm({
         [
           { key: "student", label: "Student fare estimate" },
           { key: "nearbyAlerts", label: "Vehicle proximity alerts" },
+          { key: "departureAlerts", label: "Departure reminder alerts" },
           {
             key: "communityAlerts",
             label: "Community alerts for saved routes",
