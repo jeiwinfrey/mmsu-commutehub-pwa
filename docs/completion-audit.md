@@ -1,6 +1,6 @@
 # Completion audit
 
-The goal remains the complete functional mobile app. Verification at this checkpoint: lint, TypeScript, production build, twenty-four backend tests and nine expanded production-browser tests passed. Passing the current tests does not establish that every PRD release gate is complete. No subscriptions, trials, paid plans, or purchases are authorized.
+The goal remains the complete functional mobile app. Verification at this checkpoint: lint, TypeScript, production build, twenty-nine backend tests and ten expanded production-browser tests passed. Passing the current tests does not establish that every PRD release gate is complete. No subscriptions, trials, paid plans, or purchases are authorized.
 
 ## Current evidence
 
@@ -10,7 +10,7 @@ The goal remains the complete functional mobile app. Verification at this checkp
 | Real Google sign-in and shared database | Google flow completed in Chrome; authenticated Clerk/Convex development deployment; owner-isolation and real connected browser tests | Development works; production ownership/keys/domains pending |
 | Corridors in both directions and working map | Eight stored OSRM paths, attributed Leaflet/OSM maps, simulated fleet and fixed-stop geofences | Implemented with unverified terminal candidates and illustrative tariffs |
 | Onboarding → route → vehicle/fare → pickup/radius → waiting → boarding/completion | Connected browser journey, persistence after refresh, server-side fare/state validation | Implemented |
-| Class-time planner | Backward scheduled-run search, OSRM ride distances, walking/wait breakdown, fare, edit/cancel, route handoff, revision-checked durable reminders | Implemented; expanded production-browser checks passed |
+| Class-time planner | Backward scheduled-run search, OSRM ride distances, walking/wait breakdown, fare, earlier-run comparison, explicit missed-target/earliest-arrival result, edit/cancel, route handoff, revision-checked durable reminders | Implemented; expanded production-browser checks passed |
 | Recent trips | Active record plus paginated terminal history, details, ride again, confirmed owner-scoped deletion | Implemented; expanded production-browser checks passed |
 | Community and alerts | Paginated/filterable feed; report-ID links; current report text/status in account inbox; saved-route/trip/plan eligibility; unread badge; posting/expiry/push limits | Implemented; expanded production-browser checks passed |
 | PWA installation, offline and notifications | Manifest/icons, service-worker/offline browser test, opt-in device controls and configured VAPID sender | Shell/offline verified locally; HTTPS install/background push on physical phones unverified |
@@ -21,7 +21,7 @@ The goal remains the complete functional mobile app. Verification at this checkp
 - The owner approved Clerk CLI access/ownership and development credential storage in the named Vercel Hobby project. Local browser use is disabled in Work settings, so neither approval has been executed yet; it must be enabled to finish setup.
 - Physical iOS/Android install, notification permission states, background delivery and notification click behavior require evidence beyond local manifest/offline tests.
 - Real terminal bays, directional boarding permissions, campus walking access, and official fare-matrix provenance remain unverified; current approximate catalog/tariffs are explicitly labeled. See `terminal-research.md`.
-- The broader PRD still calls for catalog maintenance/provenance review, investigation-hold release controls, full service-window/peak-congestion alignment, earlier/late planner alternatives and extended preference controls. These are not made complete by a passing browser regression suite.
+- The broader PRD still calls for catalog maintenance/provenance review, investigation-hold release controls, full service-window/peak-congestion alignment, near-term planner/fleet alignment and extended preference controls. These are not made complete by a passing browser regression suite.
 - Investigate the development SDK's session-refresh warnings under a production/staging origin; do not treat successful client rendering alone as a complete session-lifecycle audit.
 - Failed-road-route retry now performs a real server re-fetch. Backend tests cover invalid routes, provider failure, per-route cooldown, global throttling, successful replacement, and the ready-cache shortcut. Physical map/GPS checks remain part of phone QA.
 
@@ -42,3 +42,9 @@ Disconnected submissions are tested through the real account UI: an offline edit
 The existing development app owner is server-authorized for `/moderation`; students cannot self-assign a role. The mobile view paginates open/reviewed flags, requires a decision reason, and records hide/reinstate/resolve/dismiss decisions with before/after audit state. Hidden reports are excluded from public queries, redacted in account inboxes, and rejected by pending push eligibility. Restoration preserves expiry and does not re-send alerts. Account deletion removes authored-report audit evidence and anonymizes a deleted reviewer on other reports. Role revocation is through server deployment configuration, never a profile toggle.
 
 Backend checks cover fail-closed authorization, unauthorized reads/writes, hiding across all read models, delivery suppression, duplicate decisions, restoration, separate flag review and deletion/anonymization. The optional connected browser moderator check acts only on a disposable QA report, changes no owner profile data, and verifies deny/hide/reinstate/history and 320/430/844px layout. Catalog provenance maintenance, hold-release controls, and physical-device review remain separate work.
+
+## Planner alternatives checkpoint
+
+The planner now compares the recommended latest feasible run with a distinct earlier run. When the arrival target is unreachable, it presents the earliest reachable arrival, class lateness, and buffer shortfall separately. A user can save that option only through an explicit missed-target action. The server recalculates and revalidates its route and departure time; an expired/forged selection cannot become a saved plan. Missing road geometry is distinguished from unsupported direct service. Future crowding remains unknown.
+
+The connected browser test verifies earlier-run persistence, missed-target display and explicit saving, refresh, and 320/360/390/430/844px layout. Backend tests additionally cover authorization, forged selections, unreachable deadlines, the difference between lateness and lost buffer, missing geometry, and previous-day runs reaching downstream stops after midnight. Verification at this checkpoint: 29 backend tests, all 10 connected production-browser tests, lint, TypeScript, production build and Convex deployment passed. The last frontend cache-refresh/wrapping changes were rechecked through the planner browser test. Near-term telemetry/future-schedule alignment, catalog maintenance, deployment, SDK warnings and physical-device gates above remain open.

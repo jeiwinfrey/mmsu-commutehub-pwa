@@ -46,6 +46,7 @@ export function planRoute(
   classAt: number,
   bufferMinutes: number,
   now: number,
+  strategy: "latest" | "earliest" = "latest",
 ) {
   const a = route.stops.findIndex((s) => s.id === from),
     b = route.stops.findIndex((s) => s.id === to);
@@ -80,16 +81,36 @@ export function planRoute(
   let departureAt: number | null = null;
   // Include the previous local date for a class just after midnight.
   const localDay = Math.floor((latestPickup + OFFSET) / DAY) * DAY - OFFSET;
-  for (const day of [localDay, localDay - DAY]) {
+  const days =
+    strategy === "latest"
+      ? [localDay, localDay - DAY]
+      : [
+          // A previous-day terminal departure can reach a downstream stop after midnight.
+          Math.floor((now + OFFSET) / DAY) * DAY - OFFSET - DAY,
+          Math.floor((now + OFFSET) / DAY) * DAY - OFFSET,
+          Math.floor((now + OFFSET) / DAY) * DAY - OFFSET + DAY,
+        ];
+  for (const day of days) {
     const first = day + (service.opens + originOffset) * MINUTE,
       last = day + (service.closes + originOffset) * MINUTE;
     const candidate =
-      first +
-      Math.floor(
-        (Math.min(latestPickup, last) - first) / (service.headway * MINUTE),
-      ) *
-        service.headway *
-        MINUTE;
+      strategy === "latest"
+        ? first +
+          Math.floor(
+            (Math.min(latestPickup, last) - first) / (service.headway * MINUTE),
+          ) *
+            service.headway *
+            MINUTE
+        : first +
+          Math.max(
+            0,
+            Math.floor(
+              (now + (originWalkMinutes + waitMinutes) * MINUTE - first) /
+                (service.headway * MINUTE),
+            ) + 1,
+          ) *
+            service.headway *
+            MINUTE;
     if (candidate >= first && candidate <= last) {
       departureAt = candidate;
       break;
@@ -116,5 +137,10 @@ export function planRoute(
     regularFareCentavos: fare.regularCentavos,
     studentFareCentavos: fare.studentCentavos,
     serviceVersion: SERVICE_VERSION,
+    bufferShortfallMinutes: Math.max(
+      0,
+      Math.ceil((arriveAt - deadline) / MINUTE),
+    ),
+    lateMinutes: Math.max(0, Math.ceil((arriveAt - classAt) / MINUTE)),
   };
 }

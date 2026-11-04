@@ -1,8 +1,7 @@
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { user } from "./lib/auth";
-import { matchingRoutes, type Coordinate } from "../src/lib/commute-catalog";
-import { planRoute } from "./lib/planning";
+import { suggestions as planSuggestions } from "./lib/planOptions";
 import { internal } from "./_generated/api";
 export const list = query({
   args: {},
@@ -24,6 +23,9 @@ export const save = mutation({
     classAt: v.number(),
     bufferMinutes: v.number(),
     student: v.optional(v.boolean()),
+    routeId: v.optional(v.string()),
+    departureAt: v.optional(v.number()),
+    acceptLate: v.optional(v.boolean()),
   },
   handler: async (ctx, a) => {
     const identity = await user(ctx),
@@ -31,41 +33,42 @@ export const save = mutation({
     const old = a.id ? await ctx.db.get(a.id) : null;
     if (a.id && (!old || old.userId !== identity.subject))
       throw new ConvexError("Plan not found.");
-    if (
-      a.classAt <= now ||
-      a.classAt > now + 366 * 86400000 ||
-      !Number.isFinite(a.classAt) ||
-      ![5, 10, 15, 20, 30].includes(a.bufferMinutes)
-    )
-      throw new ConvexError("Choose a future class time and valid buffer.");
-    const routes = matchingRoutes(a.from, a.to).filter(
-      (r) => a.mode === "any" || a.mode === r.mode,
-    );
-    if (!routes.length)
-      throw new ConvexError("No supported direct route for these choices.");
-    const candidates = [];
-    for (const route of routes) {
-      const road = await ctx.db
-        .query("roadPaths")
-        .withIndex("by_route", (q) => q.eq("routeId", route.id))
-        .unique();
-      if (!road || road.source !== "osrm") continue;
-      const plan = planRoute(
-        route,
-        road.points as Coordinate[],
-        a.from,
-        a.to,
-        a.classAt,
-        a.bufferMinutes,
-        now,
-      );
-      if (plan) candidates.push(plan);
-    }
-    candidates.sort((a, b) => b.leaveAt - a.leaveAt);
-    const plan = candidates[0];
+    const results = await planSuggestions(ctx, a, now);
+    const options = [
+      results.recommended,
+      results.earlier,
+      results.earliest,
+    ].filter((p) => p !== null);
+    const unchanged =
+      old &&
+      old.from === a.from &&
+      old.to === a.to &&
+      old.mode === a.mode &&
+      old.classAt === a.classAt &&
+      old.bufferMinutes === a.bufferMinutes;
+    const plan =
+      a.departureAt === undefined
+        ? unchanged && old.departureAt
+          ? options.find(
+              (p) =>
+                p.routeId === old.routeId && p.departureAt === old.departureAt,
+            )
+          : results.recommended
+        : options.find(
+            (p) => p.routeId === a.routeId && p.departureAt === a.departureAt,
+          );
     if (!plan)
       throw new ConvexError(
-        "No simulated service can meet this class deadline from now. Try a later class or another mode. Road routes must also be available.",
+        results.unavailable ??
+          "No simulated service can meet this class deadline from now, or the selected suggestion is no longer available. Compare departures again.",
+      );
+    if (
+      plan.bufferShortfallMinutes > 0 &&
+      !a.acceptLate &&
+      !(unchanged && old.bufferShortfallMinutes)
+    )
+      throw new ConvexError(
+        "This journey misses your arrival target. Explicitly choose the late-arrival option to save it.",
       );
     const data = {
       ...plan,
@@ -106,7 +109,7 @@ export const remind = internalMutation({
       p.revision !== revision ||
       p.reminded ||
       p.leaveAt > Date.now() ||
-      p.classAt < Date.now()
+      p.arriveAt < Date.now()
     )
       return;
     await ctx.db.patch(id, { reminded: true });
@@ -118,7 +121,9 @@ export const remind = internalMutation({
     const payload = {
       kind: "planner",
       title: "Time to leave for class",
-      body: "Your saved departure time has arrived. Check current conditions before travelling.",
+      body: p.bufferShortfallMinutes
+        ? "Your saved departure time has arrived. This plan misses your arrival target; check its arrival time before travelling."
+        : "Your saved departure time has arrived. Check current conditions before travelling.",
       href: "/planner",
     };
     await ctx.db.insert("notifications", {
@@ -133,5 +138,21 @@ export const remind = internalMutation({
       planId: p._id,
       revision: p.revision,
     });
+  },
+});
+
+export const suggestions = query({
+  args: {
+    from: v.string(),
+    to: v.string(),
+    mode: v.string(),
+    classAt: v.number(),
+    bufferMinutes: v.number(),
+    // Cache invalidation only; the server's clock remains authoritative.
+    refreshBucket: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await user(ctx);
+    return planSuggestions(ctx, args, Date.now());
   },
 });

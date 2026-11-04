@@ -264,3 +264,189 @@ test("road retries use fixed corridors, throttle requests, and preserve fallback
     vi.unstubAllGlobals();
   }
 });
+
+test("planner compares an earlier run and revalidates a chosen departure before saving", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(now);
+  const t = convexTest(schema, modules),
+    owner = t.withIdentity({ subject: "planner-owner" });
+  await t.mutation(internal.vehicles.storePath, {
+    routeId: route.id,
+    points,
+    source: "osrm",
+  });
+  const args = {
+    from: "laoag",
+    to: "mmsu",
+    mode: "modern-jeepney",
+    classAt,
+    bufferMinutes: 10,
+  };
+  await expect(t.query(api.planner.suggestions, args)).rejects.toThrow(
+    "Sign in",
+  );
+  const options = await owner.query(api.planner.suggestions, args);
+  expect(options.recommended).not.toBe(null);
+  expect(options.earlier).not.toBe(null);
+  expect(options.earlier!.departureAt).toBe(
+    options.recommended!.departureAt - 12 * 60000,
+  );
+  expect(options.earlier!.arriveAt).toBeLessThan(options.recommended!.arriveAt);
+  const selected = options.earlier!;
+  const id = await owner.mutation(api.planner.save, {
+    ...args,
+    routeId: selected.routeId,
+    departureAt: selected.departureAt,
+  });
+  expect(
+    (await owner.query(api.planner.list)).find((p) => p._id === id)?.leaveAt,
+  ).toBe(selected.leaveAt);
+  await owner.mutation(api.planner.save, { ...args, id });
+  expect(
+    (await owner.query(api.planner.list)).find((p) => p._id === id)
+      ?.departureAt,
+  ).toBe(selected.departureAt);
+  await expect(
+    owner.mutation(api.planner.save, {
+      ...args,
+      routeId: selected.routeId,
+      departureAt: selected.departureAt + 1,
+    }),
+  ).rejects.toThrow("no longer available");
+  await expect(
+    owner.mutation(api.planner.save, {
+      ...args,
+      routeId: "invented",
+      departureAt: selected.departureAt,
+    }),
+  ).rejects.toThrow("no longer available");
+});
+test("an unreachable target shows earliest arrival and requires explicit acceptance to save", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(Date.parse("2026-11-04T23:00:00+08:00"));
+  const t = convexTest(schema, modules),
+    owner = t.withIdentity({ subject: "planner-owner" });
+  await t.mutation(internal.vehicles.storePath, {
+    routeId: route.id,
+    points,
+    source: "osrm",
+  });
+  const args = {
+    from: "laoag",
+    to: "mmsu",
+    mode: "modern-jeepney",
+    classAt: Date.parse("2026-11-05T04:00:00+08:00"),
+    bufferMinutes: 10,
+  };
+  const options = await owner.query(api.planner.suggestions, args);
+  expect(options.recommended).toBe(null);
+  expect(options.earlier).toBe(null);
+  const first = options.earliest!;
+  expect(new Date(first.departureAt + 8 * 3600000).getUTCHours()).toBe(5);
+  expect(first.bufferShortfallMinutes).toBe(first.lateMinutes + 10);
+  expect(first.leaveAt).toBeGreaterThan(Date.now());
+  await expect(owner.mutation(api.planner.save, args)).rejects.toThrow(
+    "No simulated service",
+  );
+  const selected = {
+    ...args,
+    routeId: first.routeId,
+    departureAt: first.departureAt,
+  };
+  await expect(owner.mutation(api.planner.save, selected)).rejects.toThrow(
+    "Explicitly choose",
+  );
+  const id = await owner.mutation(api.planner.save, {
+    ...selected,
+    acceptLate: true,
+  });
+  const saved = (await owner.query(api.planner.list))[0];
+  expect(saved.lateMinutes).toBe(first.lateMinutes);
+  expect(saved.arriveAt).toBe(first.arriveAt);
+  vi.setSystemTime(saved.leaveAt);
+  await t.mutation(internal.planner.remind, { id, revision: saved.revision! });
+  expect((await owner.query(api.notifications.list))[0].body).toContain(
+    "misses your arrival target",
+  );
+});
+test("missing road geometry is distinct from no direct service and does not invent an itinerary", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(now);
+  const t = convexTest(schema, modules),
+    owner = t.withIdentity({ subject: "planner-owner" });
+  const args = {
+    from: "laoag",
+    to: "mmsu",
+    mode: "modern-jeepney",
+    classAt,
+    bufferMinutes: 10,
+  };
+  const unavailable = await owner.query(api.planner.suggestions, args);
+  expect(unavailable.unavailable).toContain("Road routes are unavailable");
+  expect(unavailable.recommended).toBe(null);
+  expect(unavailable.earliest).toBe(null);
+  await expect(
+    owner.query(api.planner.suggestions, { ...args, mode: "bus" }),
+  ).rejects.toThrow("No supported direct route");
+  await expect(
+    owner.query(api.planner.suggestions, { ...args, mode: "invented" }),
+  ).rejects.toThrow("supported transport mode");
+});
+
+test("a missed arrival buffer is not mislabeled as arriving after class", () => {
+  const morning = Date.parse("2026-11-05T05:05:00+08:00");
+  const first = planRoute(
+    route,
+    points,
+    "laoag",
+    "mmsu",
+    classAt,
+    10,
+    morning,
+    "earliest",
+  )!;
+  const tightClass = first.arriveAt + 3 * 60000;
+  expect(
+    planRoute(route, points, "laoag", "mmsu", tightClass, 10, morning),
+  ).toBe(null);
+  const fallback = planRoute(
+    route,
+    points,
+    "laoag",
+    "mmsu",
+    tightClass,
+    10,
+    morning,
+    "earliest",
+  )!;
+  expect(fallback.lateMinutes).toBe(0);
+  expect(fallback.bufferShortfallMinutes).toBe(7);
+  expect(fallback.arriveAt).toBeLessThan(tightClass);
+});
+
+test("earliest planning includes previous-day departures still reaching downstream stops after midnight", () => {
+  const bus = {
+    ...commuteRoutes.find((r) => r.id === "bus-vigan-outbound")!,
+    speedKmh: 10,
+  };
+  const afterMidnight = Date.parse("2026-11-05T00:05:00+08:00");
+  const first = planRoute(
+    bus,
+    bus.stops.map((s) => s.coordinates),
+    "badoc",
+    "vigan",
+    classAt,
+    10,
+    afterMidnight,
+    "earliest",
+  )!;
+  expect(first).not.toBe(null);
+  expect(first.leaveAt).toBeGreaterThan(afterMidnight);
+  expect(new Date(first.departureAt + 8 * 3600000).getUTCHours()).toBeLessThan(
+    5,
+  );
+  expect(
+    first.leaveAt +
+      (first.walkMinutes + first.waitMinutes + first.rideMinutes) * 60000,
+  ).toBe(first.arriveAt);
+});

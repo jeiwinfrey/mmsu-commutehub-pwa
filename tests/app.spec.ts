@@ -623,3 +623,102 @@ test("server-authorized moderator reviews a QA report and students cannot enter 
   });
   await context.close();
 });
+
+test("planner compares earlier departures and explicitly labels an unreachable arrival target", async ({
+  page,
+}) => {
+  await page.goto("/commute");
+  await clerk.signIn({
+    page,
+    emailAddress: "commutehub-qa+clerk_test@example.com",
+  });
+  await page.goto("/planner");
+  await page
+    .getByRole("combobox", { name: "Preferred transportation" })
+    .click();
+  await page
+    .getByRole("option", { name: "Modern jeepney", exact: true })
+    .click();
+  const tomorrow = new Date(Date.now() + 86400000 + 8 * 3600000)
+    .toISOString()
+    .slice(0, 10);
+  await page
+    .getByLabel("Class starts · Philippine time")
+    .fill(`${tomorrow}T10:00`);
+  await page
+    .getByRole("button", { name: "Compare departures before saving" })
+    .click();
+  const comparison = page.getByRole("region", { name: "Departure comparison" });
+  await expect(
+    comparison.getByText("Recommended", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    comparison.getByText("Earlier departure", { exact: true }),
+  ).toBeVisible();
+  await comparison.screenshot({
+    path: "/tmp/commutehub-planner-options.png",
+    scale: "css",
+    animations: "disabled",
+  });
+  const earlier = comparison
+    .locator('[data-slot="card"]')
+    .filter({ hasText: "Earlier departure" });
+  const leave = (await earlier.getByText(/^Leave by /).textContent())!.replace(
+    "Leave by ",
+    "",
+  );
+  await earlier.getByRole("button", { name: "Save earlier departure" }).click();
+  await expect(
+    page.getByText("Departure plan saved", { exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(page.getByText(leave, { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Edit plan", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Update departure plan", exact: true })
+    .click();
+  await expect(
+    page.getByText("Departure plan updated", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(leave, { exact: true }).first()).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "Preferred transportation" })
+    .click();
+  await page
+    .getByRole("option", { name: "Modern jeepney", exact: true })
+    .click();
+  const nearClass = new Date(Date.now() + 5 * 60000 + 8 * 3600000)
+    .toISOString()
+    .slice(0, 16);
+  await page.getByLabel("Class starts · Philippine time").fill(nearClass);
+  await page
+    .getByRole("button", { name: "Compare departures before saving" })
+    .click();
+  await expect(
+    comparison.getByText("Arrival target cannot be met", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    comparison.getByText("Earliest reachable arrival", { exact: true }),
+  ).toBeVisible();
+  await expect(comparison.getByText(/min after class starts/)).toBeVisible();
+  for (const width of [320, 360, 390, 430, 844]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+      `planner comparison at ${width}`,
+    ).toBe(false);
+  }
+  await comparison
+    .getByRole("button", { name: "Save despite missed arrival target" })
+    .click();
+  await expect(
+    page.getByText("Departure plan saved", { exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByText(/Saved departure · arrival target missed/i),
+  ).toBeVisible();
+  await expect(page.getByText(/min after class starts/)).toBeVisible();
+});

@@ -16,6 +16,7 @@ import type * as delivery from "../delivery.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_geometry from "../lib/geometry.js";
 import type * as lib_moderator from "../lib/moderator.js";
+import type * as lib_planOptions from "../lib/planOptions.js";
 import type * as lib_planning from "../lib/planning.js";
 import type * as lib_reports from "../lib/reports.js";
 import type * as lib_tripLifecycle from "../lib/tripLifecycle.js";
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/geometry": typeof lib_geometry;
   "lib/moderator": typeof lib_moderator;
+  "lib/planOptions": typeof lib_planOptions;
   "lib/planning": typeof lib_planning;
   "lib/reports": typeof lib_reports;
   "lib/tripLifecycle": typeof lib_tripLifecycle;

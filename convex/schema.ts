@@ -113,6 +113,8 @@ export default defineSchema({
     regularFareCentavos: v.optional(v.number()),
     studentFareCentavos: v.optional(v.number()),
     serviceVersion: v.optional(v.string()),
+    bufferShortfallMinutes: v.optional(v.number()),
+    lateMinutes: v.optional(v.number()),
     revision: v.optional(v.number()),
     student: v.optional(v.boolean()),
     classAt: v.number(),

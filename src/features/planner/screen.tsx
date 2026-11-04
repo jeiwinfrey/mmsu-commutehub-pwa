@@ -6,7 +6,12 @@ import type { Id, Doc } from "@/lib/backend";
 import type { TransportMode } from "@/types/commute";
 import { modeLabel, money } from "@/lib/commute-catalog";
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useConvex } from "convex/react";
+import {
+  DepartureOptions,
+  type DepartureOption,
+  type Suggestions,
+} from "./components/departure-options";
 import { useOnlineMutation as useMutation } from "@/lib/use-online-mutation";
 import { api, errorMessage, localDate } from "@/lib/backend";
 import { places, place } from "@/lib/commute-catalog";
@@ -33,6 +38,11 @@ export function PlannerScreen() {
 }
 function Planner() {
   const now = useNow();
+  const convex = useConvex();
+  const [comparison, setComparison] = useState<{
+    key: string;
+    result: Suggestions;
+  }>();
   const router = useRouter(),
     demo = useDemo();
   const [editing, setEditing] = useState<Id<"plans"> | undefined>();
@@ -46,25 +56,52 @@ function Planner() {
     [buffer, setBuffer] = useState("10"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const input = {
+    from,
+    to,
+    mode,
+    classAt: Date.parse(classTime + ":00+08:00"),
+    bufferMinutes: Number(buffer),
+  };
+  const inputKey = JSON.stringify(input);
+  const compare = async () => {
     setBusy(true);
     setError("");
     try {
-      const classAt = Date.parse(classTime + ":00+08:00");
+      if (!navigator.onLine || !convex.connectionState().isWebSocketConnected)
+        throw new Error(
+          "Reconnect to compare current departure suggestions. Your form is still a draft.",
+        );
+      setComparison({
+        key: inputKey,
+        result: await convex.query(api.planner.suggestions, {
+          ...input,
+          refreshBucket: Math.floor(Date.now() / 10000),
+        }),
+      });
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const persist = async (selection?: DepartureOption) => {
+    setBusy(true);
+    setError("");
+    try {
       await save({
+        ...input,
         id: editing,
-        from,
-        to,
-        mode,
-        classAt,
-        bufferMinutes: Number(buffer),
+        routeId: selection?.routeId,
+        departureAt: selection?.departureAt,
+        acceptLate: Boolean(selection?.bufferShortfallMinutes),
         student: demo.preferences.student,
       });
       toast.success(
         editing ? "Departure plan updated" : "Departure plan saved",
       );
       setEditing(undefined);
+      setComparison(undefined);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -103,9 +140,15 @@ function Planner() {
     <div className="feature-stack">
       <Intro
         title="Make time\nfor your morning."
-        description="Work back from your class time. Your plan is saved to your account."
+        description="Work back from your class time. Compare options, then save a departure to your account."
       />
-      <form onSubmit={submit} className="feature-stack">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void persist();
+        }}
+        className="feature-stack"
+      >
         {editing && (
           <p role="status" className="text-sm font-semibold text-primary">
             Editing saved plan. Changes will replace its departure reminder.
@@ -173,6 +216,16 @@ function Planner() {
               ? "Update departure plan"
               : "Suggest and save departure"}
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy}
+          onClick={(e) => {
+            if (e.currentTarget.form?.reportValidity()) void compare();
+          }}
+        >
+          {busy ? "Calculating…" : "Compare departures before saving"}
+        </Button>
         {editing && (
           <Button
             variant="outline"
@@ -186,6 +239,15 @@ function Planner() {
           </Button>
         )}
       </form>
+      {comparison?.key === inputKey && (
+        <DepartureOptions
+          result={comparison.result}
+          classAt={input.classAt}
+          student={demo.preferences.student}
+          busy={busy}
+          onSave={(option) => void persist(option)}
+        />
+      )}
       <Notice title="Allow some breathing room">
         Schedules and vehicle speeds are simulated: 5 AM–9 PM terminal
         departures, with 10-minute traditional jeepneys, 12-minute modern
@@ -210,7 +272,11 @@ function Planner() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="hero-panel">
-                <p className="eyebrow">SUGGESTED DEPARTURE</p>
+                <p className="eyebrow">
+                  {p.bufferShortfallMinutes
+                    ? "SAVED DEPARTURE · ARRIVAL TARGET MISSED"
+                    : "SUGGESTED DEPARTURE"}
+                </p>
                 <p className="text-2xl font-semibold tabular-nums">
                   {localDate(p.leaveAt)}
                 </p>
@@ -230,9 +296,17 @@ function Planner() {
                 Expected arrival <strong>{localDate(p.arriveAt)}</strong>
               </p>
               <p className="text-sm text-muted-foreground">
-                Class {localDate(p.classAt)} · at least {p.bufferMinutes} min
-                early
+                Class {localDate(p.classAt)} · requested buffer{" "}
+                {p.bufferMinutes} min
               </p>
+              {Boolean(p.bufferShortfallMinutes) && (
+                <p className="text-sm font-semibold text-destructive">
+                  {p.lateMinutes
+                    ? `${p.lateMinutes} min after class starts.`
+                    : "Requested arrival buffer is not met."}{" "}
+                  Arrival target missed by {p.bufferShortfallMinutes} min.
+                </p>
+              )}
               <Metrics
                 items={[
                   { label: "Walking", value: `${p.walkMinutes} min` },
@@ -240,6 +314,14 @@ function Planner() {
                   { label: "Ride estimate", value: `${p.rideMinutes} min` },
                 ]}
               />
+              <p className="text-sm">
+                Total journey {p.walkMinutes + p.waitMinutes + p.rideMinutes}{" "}
+                min ·{" "}
+                {p.arriveAt <= p.classAt
+                  ? `${Math.floor((p.classAt - p.arriveAt) / 60000)} min before class`
+                  : `${Math.ceil((p.arriveAt - p.classAt) / 60000)} min after class`}
+                .
+              </p>
               {p.regularFareCentavos !== undefined && (
                 <p className="font-semibold text-primary">
                   {money(
