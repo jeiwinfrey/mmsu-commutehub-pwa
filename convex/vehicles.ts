@@ -1,6 +1,11 @@
 import { sweptDistance } from "./lib/geometry";
-import { v } from "convex/values";
-import { query, internalMutation, internalAction } from "./_generated/server";
+import { v, ConvexError } from "convex/values";
+import {
+  query,
+  action,
+  internalMutation,
+  internalAction,
+} from "./_generated/server";
 import {
   commuteRoutes,
   vehiclesFor,
@@ -148,12 +153,18 @@ export const tick = internalMutation({
           await ctx.scheduler.runAfter(0, internal.push.send, {
             ...payload,
             userId: t.userId,
+            tripId: t._id,
           });
         }
       }
     }
     for (const p of plans)
-      if (!p.reminded && p.leaveAt <= now && p.leaveAt > now - 120000) {
+      if (
+        !p.revision &&
+        !p.reminded &&
+        p.leaveAt <= now &&
+        p.leaveAt > now - 120000
+      ) {
         await ctx.db.patch(p._id, { reminded: true });
         const payload = {
           kind: "planner",
@@ -224,6 +235,86 @@ export const seedPaths = internalAction({
         source,
       });
       await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+  },
+});
+
+export const claimRouteRetry = internalMutation({
+  args: { routeId: v.string() },
+  handler: async (ctx, { routeId }) => {
+    const route = commuteRoutes.find((r) => r.id === routeId);
+    if (!route) throw new ConvexError("Unknown corridor.");
+    const paths = await ctx.db.query("roadPaths").collect(),
+      path = paths.find((p) => p.routeId === routeId);
+    if (path?.source === "osrm") return "ready" as const;
+    const now = Date.now();
+    if (now - (path?.retryAt ?? 0) < 60000) return "cooldown" as const;
+    if (now - Math.max(0, ...paths.map((p) => p.retryAt ?? 0)) < 1200)
+      return "busy" as const;
+    if (path) await ctx.db.patch(path._id, { retryAt: now });
+    else
+      await ctx.db.insert("roadPaths", {
+        routeId,
+        points: route.stops.map((s) => s.coordinates),
+        source: "schematic",
+        updatedAt: now,
+        retryAt: now,
+      });
+    return "claimed" as const;
+  },
+});
+export const retryPath = action({
+  args: { routeId: v.string() },
+  handler: async (ctx, { routeId }): Promise<{ source: "osrm" }> => {
+    const route = commuteRoutes.find((r) => r.id === routeId);
+    if (!route) throw new ConvexError("Unknown corridor.");
+    const claim = await ctx.runMutation(internal.vehicles.claimRouteRetry, {
+      routeId,
+    });
+    if (claim === "ready") return { source: "osrm" };
+    if (claim !== "claimed")
+      throw new ConvexError(
+        claim === "cooldown"
+          ? "Please wait one minute before retrying this road route. Manual stop selection still works."
+          : "Routing is handling another request. Try again in a moment.",
+      );
+    try {
+      const coordinates = route.stops
+        .map((s) => s.coordinates.join(","))
+        .join(";");
+      const response = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`,
+        { signal: AbortSignal.timeout(20000) },
+      );
+      const data = await response.json(),
+        points: unknown = data.routes?.[0]?.geometry?.coordinates;
+      if (
+        !response.ok ||
+        data.code !== "Ok" ||
+        !Array.isArray(points) ||
+        points.length < 2 ||
+        points.length > 100000 ||
+        !points.every(
+          (p) =>
+            Array.isArray(p) &&
+            p.length >= 2 &&
+            Number.isFinite(p[0]) &&
+            Number.isFinite(p[1]) &&
+            Math.abs(p[0]) <= 180 &&
+            Math.abs(p[1]) <= 90,
+        )
+      )
+        throw new Error("Invalid road geometry");
+      await ctx.runMutation(internal.vehicles.storePath, {
+        routeId,
+        points: points as number[][],
+        source: "osrm",
+      });
+      return { source: "osrm" };
+    } catch {
+      throw new ConvexError(
+        "Road routing is unavailable. You can still select a listed pickup stop.",
+      );
     }
   },
 });

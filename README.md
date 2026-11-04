@@ -4,7 +4,7 @@ A mobile-first commuter PWA built with **Next.js App Router, TypeScript, Tailwin
 
 The current implementation connects sign-in, preferences, saved routes, trip history, departure plans, community reports, and alerts to a shared Convex database. Vehicle operations are simulated. Terminal coordinates and fare tariffs are illustrative and require local verification. No seats are reserved or tickets sold.
 
-**Free services only. Do not start subscriptions, trials, paid plans, or purchases.** Authentication currently uses a Clerk development instance; ownership claiming and production credentials need the account owner's approval. See [implementation status](docs/implementation-status.md) for verified checks and remaining release work.
+**Free services only. Do not start subscriptions, trials, paid plans, or purchases.** Authentication currently uses a Clerk development instance; ownership claiming and production credentials need the account owner's approval. See [implementation status](docs/implementation-status.md) and [completion audit](docs/completion-audit.md) for verified checks and remaining release work.
 
 ## Before you start coding
 

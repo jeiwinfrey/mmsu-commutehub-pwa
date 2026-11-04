@@ -1,3 +1,4 @@
+import { commuteRoutes } from "../../src/lib/commute-catalog";
 import { sweptDistance } from "../../convex/lib/geometry";
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
@@ -114,6 +115,12 @@ test("planner validates connections and time, scopes records to owner", async ()
     classAt: Date.now() + 86400000,
     bufferMinutes: 15,
   };
+  const route = commuteRoutes.find((r) => r.id === routeId)!;
+  await t.mutation(internal.vehicles.storePath, {
+    routeId,
+    points: route.stops.map((s) => s.coordinates),
+    source: "osrm",
+  });
   const id = await a.mutation(api.planner.save, data);
   expect(await b.query(api.planner.list)).toHaveLength(0);
   await expect(b.mutation(api.planner.remove, { id })).rejects.toThrow(

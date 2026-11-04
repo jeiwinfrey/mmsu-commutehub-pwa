@@ -1,7 +1,20 @@
 "use client";
+import { useRouter } from "next/navigation";
+import { useDemo } from "@/components/commute/demo-provider";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import Link from "next/link";
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
 import { api, errorMessage, localDate, type Doc } from "@/lib/backend";
 import { AccountRequired } from "@/components/commute/account-required";
 import { Intro } from "@/components/commute/ui";
@@ -33,13 +46,23 @@ export function TripsScreen() {
   );
 }
 function Trips() {
-  const trips = useQuery(api.trips.list),
-    update = useMutation(api.trips.update);
+  const active = useQuery(api.trips.active);
+  const {
+    results: history,
+    status,
+    loadMore,
+  } = usePaginatedQuery(api.trips.history, {}, { initialNumItems: 10 });
+  const update = useMutation(api.trips.update),
+    remove = useMutation(api.trips.remove);
+  const demo = useDemo(),
+    router = useRouter();
   const [details, setDetails] = useState<Doc<"trips"> | null>(null),
     [busy, setBusy] = useState(false);
-  const active = trips?.find(
-    (t) => t.status === "waiting" || t.status === "riding",
-  );
+  const again = (trip: Doc<"trips">) => {
+    demo.setSearch({ from: trip.pickupId, to: trip.to });
+    demo.chooseRoute(trip.routeId);
+    router.push("/commute/vehicles");
+  };
   const change = async (
     t: Doc<"trips">,
     status: "riding" | "completed" | "cancelled",
@@ -66,7 +89,7 @@ function Trips() {
         title="Every ride,\nin one place."
         description="Your active journey and recent trip history."
       />
-      {!trips ? (
+      {active === undefined || status === "LoadingFirstPage" ? (
         <Skeleton className="h-48" />
       ) : (
         <>
@@ -123,35 +146,40 @@ function Trips() {
             </Card>
           )}
           <h2 className="text-lg font-semibold">Recent trips</h2>
-          {!trips.filter(
-            (t) => t.status === "completed" || t.status === "cancelled",
-          ).length ? (
+          {!history.length ? (
             <div className="empty-panel">
               Completed and cancelled journeys will appear here.
             </div>
           ) : (
-            trips
-              .filter(
-                (t) => t.status === "completed" || t.status === "cancelled",
-              )
-              .map((t) => (
-                <Card key={t._id}>
-                  <CardHeader>
-                    <Badge variant="secondary" className="w-fit">
-                      {t.status}
-                    </Badge>
-                    <CardTitle>
-                      {place(t.pickupId)?.shortName} → {place(t.to)?.shortName}
-                    </CardTitle>
-                    <CardDescription>{localDate(t.createdAt)}</CardDescription>
-                  </CardHeader>
-                  <CardFooter>
-                    <Button variant="outline" onClick={() => setDetails(t)}>
-                      Trip details
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))
+            history.map((t) => (
+              <Card key={t._id}>
+                <CardHeader>
+                  <Badge variant="secondary" className="w-fit">
+                    {t.status}
+                  </Badge>
+                  <CardTitle>
+                    {place(t.pickupId)?.shortName} → {place(t.to)?.shortName}
+                  </CardTitle>
+                  <CardDescription>{localDate(t.createdAt)}</CardDescription>
+                </CardHeader>
+                <CardFooter className="flex flex-wrap gap-2">
+                  <Button disabled={!!active} onClick={() => again(t)}>
+                    Ride again
+                  </Button>
+                  <Button variant="outline" onClick={() => setDetails(t)}>
+                    Trip details
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))
+          )}
+          {status === "CanLoadMore" && (
+            <Button variant="outline" onClick={() => loadMore(10)}>
+              Load older trips
+            </Button>
+          )}
+          {status === "LoadingMore" && (
+            <p role="status">Loading older trips…</p>
           )}
         </>
       )}
@@ -202,11 +230,64 @@ function Trips() {
                 <dt className="text-muted-foreground">Finished</dt>
                 <dd>{details.endedAt ? localDate(details.endedAt) : "—"}</dd>
               </div>
+              {details.boardedAt && details.endedAt && (
+                <div>
+                  <dt className="text-muted-foreground">
+                    Your recorded ride duration
+                  </dt>
+                  <dd>
+                    {Math.max(
+                      1,
+                      Math.round((details.endedAt - details.boardedAt) / 60000),
+                    )}{" "}
+                    min · user-confirmed, not measured GPS
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt className="text-muted-foreground">Status</dt>
                 <dd>{details.status}</dd>
               </div>
             </dl>
+          )}
+          {details && (
+            <div className="grid gap-3 px-6 pb-8">
+              <Button disabled={!!active} onClick={() => again(details)}>
+                Ride again
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" className="text-destructive">
+                    Delete trip from history
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this trip?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This removes this completed or cancelled journey from your
+                      account history. It cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep trip</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        try {
+                          await remove({ id: details._id });
+                          setDetails(null);
+                          toast.success("Trip removed from history");
+                        } catch (e) {
+                          toast.error(errorMessage(e));
+                        }
+                      }}
+                    >
+                      Delete trip
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           )}
         </SheetContent>
       </Sheet>

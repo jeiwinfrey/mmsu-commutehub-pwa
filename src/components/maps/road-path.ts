@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import type { Coordinate, DemoRoute } from "@/lib/commute-catalog";
 import { distanceMeters } from "@/lib/commute-catalog";
 export type RoadPath = {
@@ -5,27 +6,46 @@ export type RoadPath = {
   source: "osrm" | "schematic";
   error?: string;
 };
-import { useQuery } from "convex/react";
-import { api } from "@/lib/backend";
+import { useQuery, useAction } from "convex/react";
+import { toast } from "sonner";
+import { api, errorMessage } from "@/lib/backend";
 /** Geometry is fetched once by the backend, not once per browser or vehicle tick. */
 export function useRoadPath(route: DemoRoute) {
+  const retryAction = useAction(api.vehicles.retryPath);
+  const [retrying, setRetrying] = useState(false);
   const paths = useQuery(api.vehicles.paths);
   const road = paths?.find((p) => p.routeId === route.id);
-  const path: RoadPath | null = paths
-    ? {
-        points: (road?.points ??
-          route.stops.map((s) => s.coordinates)) as Coordinate[],
-        source: road?.source === "osrm" ? "osrm" : "schematic",
-        error:
-          road?.source === "osrm"
-            ? undefined
-            : "Road routing is unavailable. The dashed line is schematic; stop selection still works.",
-      }
-    : null;
+  const path: RoadPath | null = useMemo(
+    () =>
+      paths
+        ? {
+            points: (road?.points ??
+              route.stops.map((s) => s.coordinates)) as Coordinate[],
+            source: road?.source === "osrm" ? "osrm" : "schematic",
+            error:
+              road?.source === "osrm"
+                ? undefined
+                : "Road routing is unavailable. The dashed line is schematic; stop selection still works.",
+          }
+        : null,
+    [paths, road, route],
+  );
   return {
     path,
     loading: paths === undefined,
-    retry: () => window.location.reload(),
+    retrying,
+    retry: async () => {
+      if (retrying) return;
+      setRetrying(true);
+      try {
+        await retryAction({ routeId: route.id });
+        toast.success("Road route updated");
+      } catch (e) {
+        toast.error(errorMessage(e));
+      } finally {
+        setRetrying(false);
+      }
+    },
   };
 }
 export function cumulativeDistances(points: readonly Coordinate[]) {

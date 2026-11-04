@@ -6,12 +6,26 @@ import { v } from "convex/values";
 export const send = internalAction({
   args: {
     userId: v.string(),
+    reportId: v.optional(v.id("reports")),
+    planId: v.optional(v.id("plans")),
+    revision: v.optional(v.number()),
+    tripId: v.optional(v.id("trips")),
     title: v.string(),
     body: v.string(),
     href: v.string(),
     kind: v.string(),
   },
   handler: async (ctx, a) => {
+    if (
+      !(await ctx.runQuery(internal.notifications.deliveryAllowed, {
+        userId: a.userId,
+        reportId: a.reportId,
+        planId: a.planId,
+        revision: a.revision,
+        tripId: a.tripId,
+      }))
+    )
+      return;
     const pub = process.env.VAPID_PUBLIC_KEY,
       priv = process.env.VAPID_PRIVATE_KEY;
     if (!pub || !priv) return;

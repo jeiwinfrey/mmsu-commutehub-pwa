@@ -1,4 +1,5 @@
 "use client";
+import { useNow } from "@/lib/use-now";
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
@@ -25,6 +26,7 @@ export function AlertsScreen() {
   );
 }
 function Alerts() {
+  const now = useNow();
   const alerts = useQuery(api.notifications.list),
     read = useMutation(api.notifications.read);
   const [filter, setFilter] = useState("all");
@@ -92,6 +94,15 @@ function Alerts() {
               <CardHeader>
                 <div className="flex gap-2">
                   <Badge variant="secondary">{a.kind}</Badge>
+                  {a.reportExpiresAt && (
+                    <Badge variant="outline">
+                      {a.reportResolved
+                        ? "Resolved"
+                        : a.reportExpiresAt < now
+                          ? "Expired"
+                          : "Unverified report"}
+                    </Badge>
+                  )}
                   {!a.read && <Badge>Unread</Badge>}
                 </div>
                 <CardTitle>{a.title}</CardTitle>
@@ -99,6 +110,12 @@ function Alerts() {
               </CardHeader>
               <CardContent>
                 <p>{a.body}</p>
+                {a.reportAuthor && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {a.reportAuthor} · observed {localDate(a.reportObservedAt!)}{" "}
+                    · expires {localDate(a.reportExpiresAt!)}
+                  </p>
+                )}
               </CardContent>
               <CardFooter>
                 <Button asChild variant="outline">

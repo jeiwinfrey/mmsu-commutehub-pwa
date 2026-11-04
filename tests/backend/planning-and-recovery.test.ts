@@ -1,0 +1,266 @@
+/// <reference types="vite/client" />
+import { convexTest } from "convex-test";
+import { test, expect, vi, afterEach } from "vitest";
+import { api, internal } from "../../convex/_generated/api";
+import schema from "../../convex/schema";
+import { commuteRoutes } from "../../src/lib/commute-catalog";
+import { planRoute, serviceFor } from "../../convex/lib/planning";
+const modules = import.meta.glob("../../convex/**/*.ts"),
+  route = commuteRoutes.find(
+    (r) => r.id === "modern-jeepney-jeepney-outbound",
+  )!;
+const points = route.stops.map((s) => s.coordinates);
+const classAt = Date.parse("2026-11-05T10:00:00+08:00"),
+  now = Date.parse("2026-11-04T12:00:00+08:00");
+const defaults = {
+  name: "QA",
+  campus: "MMSU Batac Main Campus",
+  mode: "any",
+  student: true,
+  nearbyAlerts: true,
+  communityAlerts: true,
+  onboarded: true,
+};
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
+test("backward planning selects a scheduled departure and counts every leg once", () => {
+  const plan = planRoute(route, points, "laoag", "mmsu", classAt, 10, now)!;
+  expect(plan).not.toBeNull();
+  expect(
+    plan.leaveAt +
+      (plan.walkMinutes + plan.waitMinutes + plan.rideMinutes) * 60000,
+  ).toBe(plan.arriveAt);
+  expect(plan.arriveAt).toBeLessThanOrEqual(classAt - 10 * 60000);
+  expect(classAt - 10 * 60000 - plan.arriveAt).toBeLessThan(
+    serviceFor(route).headway * 60000,
+  );
+  const localMinutes =
+    new Date(plan.departureAt + 8 * 3600000).getUTCHours() * 60 +
+    new Date(plan.departureAt + 8 * 3600000).getUTCMinutes();
+  expect((localMinutes - 300) % 12).toBe(0);
+  expect(plan.studentFareCentavos).toBe(
+    Math.round(plan.regularFareCentavos * 0.8),
+  );
+});
+test("service windows handle previous-day classes and reject an unreachable deadline", () => {
+  const midnight = Date.parse("2026-11-05T00:30:00+08:00");
+  const plan = planRoute(route, points, "laoag", "mmsu", midnight, 10, now)!;
+  expect(new Date(plan.departureAt + 8 * 3600000).getUTCDate()).toBe(4);
+  expect(plan.arriveAt).toBeLessThan(midnight);
+  expect(
+    planRoute(
+      route,
+      points,
+      "laoag",
+      "mmsu",
+      Date.parse("2026-11-05T04:00:00+08:00"),
+      10,
+      Date.parse("2026-11-04T23:00:00+08:00"),
+    ),
+  ).toBeNull();
+  expect(
+    planRoute(route, points, "mmsu", "laoag", classAt, 10, now),
+  ).toBeNull();
+});
+test("edited and cancelled plans invalidate reminders and preserve owner boundaries", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(now);
+  const t = convexTest(schema, modules),
+    a = t.withIdentity({ subject: "qa-a" }),
+    b = t.withIdentity({ subject: "qa-b" });
+  await t.mutation(internal.vehicles.storePath, {
+    routeId: route.id,
+    points,
+    source: "osrm",
+  });
+  const args = {
+    from: "laoag",
+    to: "mmsu",
+    mode: "modern-jeepney",
+    classAt,
+    bufferMinutes: 10,
+  };
+  const id = await a.mutation(api.planner.save, args);
+  const old = (await a.query(api.planner.list))[0];
+  await expect(b.mutation(api.planner.save, { ...args, id })).rejects.toThrow(
+    "Plan not found",
+  );
+  await a.mutation(api.planner.save, {
+    ...args,
+    id,
+    classAt: classAt + 3600000,
+  });
+  const updated = (await a.query(api.planner.list))[0];
+  vi.setSystemTime(old.leaveAt);
+  await t.mutation(internal.planner.remind, { id, revision: old.revision! });
+  expect(await a.query(api.notifications.list)).toHaveLength(0);
+  vi.setSystemTime(updated.leaveAt);
+  await t.mutation(internal.planner.remind, {
+    id,
+    revision: updated.revision!,
+  });
+  await t.mutation(internal.planner.remind, {
+    id,
+    revision: updated.revision!,
+  });
+  expect(await a.query(api.notifications.list)).toHaveLength(1);
+  await a.mutation(api.planner.remove, { id });
+  expect(
+    await t.query(internal.notifications.deliveryAllowed, {
+      userId: "qa-a",
+      planId: id,
+      revision: updated.revision,
+    }),
+  ).toBe(false);
+});
+test("historical trip deletion cannot remove an active trip or another owner's history", async () => {
+  const t = convexTest(schema, modules),
+    a = t.withIdentity({ subject: "qa-a" }),
+    b = t.withIdentity({ subject: "qa-b" });
+  await t.mutation(internal.vehicles.tick, {});
+  const vehicle = (await t.query(api.vehicles.list)).find(
+    (v) => v.routeId === route.id && v.occupancy === "seats-available",
+  )!;
+  const id = await a.mutation(api.trips.start, {
+    routeId: route.id,
+    vehicleId: vehicle.key,
+    from: "laoag",
+    to: "mmsu",
+    pickupId: "laoag",
+    radius: 500,
+    student: true,
+  });
+  await expect(a.mutation(api.trips.remove, { id })).rejects.toThrow(
+    "active trip",
+  );
+  await a.mutation(api.trips.update, { id, status: "cancelled" });
+  await expect(b.mutation(api.trips.remove, { id })).rejects.toThrow(
+    "Trip not found",
+  );
+  expect(
+    (
+      await a.query(api.trips.history, {
+        paginationOpts: { numItems: 10, cursor: null },
+      })
+    ).page,
+  ).toHaveLength(1);
+  await a.mutation(api.trips.remove, { id });
+  expect(
+    (
+      await a.query(api.trips.history, {
+        paginationOpts: { numItems: 10, cursor: null },
+      })
+    ).page,
+  ).toHaveLength(0);
+});
+test("community alerts follow report edits, expiry, resolution, and deduplicate fanout", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(now);
+  const t = convexTest(schema, modules),
+    a = t.withIdentity({ subject: "qa-a" }),
+    b = t.withIdentity({ subject: "qa-b" });
+  await b.mutation(api.accounts.save, defaults);
+  await b.mutation(api.accounts.toggleRoute, { routeId: route.id });
+  const args = {
+    routeId: route.id,
+    category: "crowding",
+    area: "Batac",
+    description: "A long boarding queue has formed.",
+  };
+  const id = await a.mutation(api.community.publish, args);
+  await t.mutation(internal.notifications.fanout, { reportId: id });
+  await t.mutation(internal.notifications.fanout, { reportId: id });
+  expect(await b.query(api.notifications.list)).toHaveLength(1);
+  await a.mutation(api.community.publish, {
+    ...args,
+    id,
+    description: "The boarding queue is moving again.",
+  });
+  expect((await b.query(api.notifications.list))[0].body).toBe(
+    "The boarding queue is moving again.",
+  );
+  await a.mutation(api.community.resolve, { id });
+  expect((await b.query(api.notifications.list))[0].reportResolved).toBe(true);
+  expect(
+    await t.query(internal.notifications.deliveryAllowed, {
+      userId: "qa-b",
+      reportId: id,
+    }),
+  ).toBe(false);
+  expect(await t.query(api.community.byId, { id: "not-an-id" })).toBeNull();
+});
+test("crowding expires after fifteen minutes and posting is limited to three in ten minutes", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(now);
+  const t = convexTest(schema, modules),
+    a = t.withIdentity({ subject: "qa-a" }),
+    b = t.withIdentity({ subject: "qa-b" });
+  const args = {
+    routeId: route.id,
+    category: "crowding",
+    area: "Batac",
+    description: "A long boarding queue has formed.",
+  };
+  const id = await a.mutation(api.community.publish, args);
+  const report = await t.query(api.community.byId, { id });
+  expect(report!.expiresAt - report!.createdAt).toBe(15 * 60000);
+  await a.mutation(api.community.publish, args);
+  await a.mutation(api.community.publish, args);
+  await expect(a.mutation(api.community.publish, args)).rejects.toThrow(
+    "three reports",
+  );
+  vi.setSystemTime(now + 15 * 60000);
+  await expect(b.mutation(api.community.confirm, { id })).rejects.toThrow(
+    "no longer active",
+  );
+});
+
+test("road retries use fixed corridors, throttle requests, and preserve fallback on failure", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(now);
+  const t = convexTest(schema, modules);
+  const request = vi
+    .fn()
+    .mockResolvedValue(
+      new Response(JSON.stringify({ code: "NoRoute" }), { status: 503 }),
+    );
+  vi.stubGlobal("fetch", request);
+  try {
+    await expect(
+      t.action(api.vehicles.retryPath, { routeId: "not-a-route" }),
+    ).rejects.toThrow("Unknown corridor");
+    expect(request).not.toHaveBeenCalled();
+    await expect(
+      t.action(api.vehicles.retryPath, { routeId: route.id }),
+    ).rejects.toThrow("Road routing is unavailable");
+    expect((await t.query(api.vehicles.paths))[0].source).toBe("schematic");
+    await expect(
+      t.action(api.vehicles.retryPath, { routeId: route.id }),
+    ).rejects.toThrow("one minute");
+    const other = commuteRoutes.find((r) => r.id !== route.id)!;
+    await expect(
+      t.action(api.vehicles.retryPath, { routeId: other.id }),
+    ).rejects.toThrow("another request");
+    expect(request).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(now + 61000);
+    request.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: "Ok",
+          routes: [{ geometry: { coordinates: points } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    await expect(
+      t.action(api.vehicles.retryPath, { routeId: route.id }),
+    ).resolves.toEqual({ source: "osrm" });
+    expect((await t.query(api.vehicles.paths))[0].source).toBe("osrm");
+    await t.action(api.vehicles.retryPath, { routeId: route.id });
+    expect(request).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

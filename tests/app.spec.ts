@@ -92,6 +92,7 @@ test("public routes and phone navigation stay within the viewport", async ({
 test("signed-in preferences, trip lifecycle, and planner persist in the real database", async ({
   page,
 }) => {
+  test.setTimeout(90000);
   await page.goto("/commute");
   await clerk.signIn({
     page,
@@ -150,9 +151,30 @@ test("signed-in preferences, trip lifecycle, and planner persist in the real dat
   await page
     .getByRole("button", { name: "I’ve arrived · complete trip" })
     .click();
+  await expect(page.getByText("Trip completed", { exact: true })).toBeVisible();
   await page.goto("/trips");
   await expect(
     page.getByText("completed", { exact: true }).first(),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Ride again", exact: true })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/commute\/vehicles/);
+  await page.goto("/trips");
+  await page
+    .getByRole("button", { name: "Trip details", exact: true })
+    .first()
+    .click();
+  await page
+    .getByRole("button", { name: "Delete trip from history", exact: true })
+    .click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Delete trip", exact: true })
+    .click();
+  await expect(
+    page.getByText("Trip removed from history", { exact: true }),
   ).toBeVisible();
   await page.goto("/planner");
   const tomorrow = new Date(Date.now() + 86400000);
@@ -168,10 +190,36 @@ test("signed-in preferences, trip lifecycle, and planner persist in the real dat
   ).toBeVisible();
   await page.reload();
   await expect(page.getByText("SUGGESTED DEPARTURE").first()).toBeVisible();
+  await page
+    .getByRole("button", { name: "Edit plan", exact: true })
+    .first()
+    .click();
+  await page.getByLabel("Class starts · Philippine time").fill(`${date}T11:00`);
+  await page
+    .getByRole("button", { name: "Update departure plan", exact: true })
+    .click();
+  await expect(
+    page.getByText("Departure plan updated", { exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Use this route", exact: true })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/commute\/vehicles/);
+  await expect(
+    page.getByRole("radio", { name: "Modern", exact: true }),
+  ).toBeChecked();
+  await page.goto("/planner");
   await page.screenshot({
     path: "/tmp/commutehub-planner.png",
     fullPage: true,
   });
+  await page
+    .getByRole("button", { name: "Remove plan", exact: true })
+    .first()
+    .click();
+  await expect(page.getByText("Plan removed", { exact: true })).toBeVisible();
 });
 test("manifest, service worker, and offline navigation work", async ({
   page,
@@ -278,6 +326,20 @@ test("community changes and saved-route alerts synchronize between accounts", as
   ).toBeVisible();
   await own.getByRole("button", { name: "Mark resolved" }).click();
   await expect(report.getByText("Resolved", { exact: true })).toBeVisible();
+  await observer.goto("/alerts");
+  const alert = observer
+    .locator('[data-slot="card"]')
+    .filter({ hasText: area });
+  await expect(
+    alert.getByText(
+      "Updated dedicated development test: the queue has started moving again.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(alert.getByText("Resolved", { exact: true })).toBeVisible();
+  await expect(
+    observer.getByRole("link", { name: "Open alerts", exact: true }),
+  ).toBeVisible();
   await cleanTestAccount(observer);
   await observerContext.close();
 });

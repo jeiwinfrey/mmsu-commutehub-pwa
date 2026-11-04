@@ -1,5 +1,10 @@
 "use client";
 import { useNow } from "@/lib/use-now";
+import { useRouter } from "next/navigation";
+import { useDemo } from "@/components/commute/demo-provider";
+import type { Id, Doc } from "@/lib/backend";
+import type { TransportMode } from "@/types/commute";
+import { modeLabel, money } from "@/lib/commute-catalog";
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api, errorMessage, localDate } from "@/lib/backend";
@@ -27,6 +32,9 @@ export function PlannerScreen() {
 }
 function Planner() {
   const now = useNow();
+  const router = useRouter(),
+    demo = useDemo();
+  const [editing, setEditing] = useState<Id<"plans"> | undefined>();
   const plans = useQuery(api.planner.list),
     save = useMutation(api.planner.save),
     remove = useMutation(api.planner.remove);
@@ -34,7 +42,7 @@ function Planner() {
     [to, setTo] = useState("mmsu"),
     [mode, setMode] = useState("any"),
     [classTime, setTime] = useState(""),
-    [buffer, setBuffer] = useState("15"),
+    [buffer, setBuffer] = useState("10"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
@@ -43,13 +51,52 @@ function Planner() {
     setError("");
     try {
       const classAt = Date.parse(classTime + ":00+08:00");
-      await save({ from, to, mode, classAt, bufferMinutes: Number(buffer) });
-      toast.success("Departure plan saved");
+      await save({
+        id: editing,
+        from,
+        to,
+        mode,
+        classAt,
+        bufferMinutes: Number(buffer),
+        student: demo.preferences.student,
+      });
+      toast.success(
+        editing ? "Departure plan updated" : "Departure plan saved",
+      );
+      setEditing(undefined);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
+  };
+  const edit = (p: Doc<"plans">) => {
+    setEditing(p._id);
+    setFrom(p.from);
+    setTo(p.to);
+    setMode(p.mode);
+    setBuffer(String(p.bufferMinutes));
+    setTime(new Date(p.classAt + 8 * 3600000).toISOString().slice(0, 16));
+    setError("");
+    window.scrollTo({
+      top: 0,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+    });
+  };
+  const startPlannedRoute = (p: Doc<"plans">) => {
+    if (!p.routeId) {
+      edit(p);
+      return;
+    }
+    demo.setSearch({
+      from: p.from,
+      to: p.to,
+      mode: p.selectedMode as TransportMode | undefined,
+    });
+    demo.chooseRoute(p.routeId);
+    router.push("/commute/vehicles");
   };
   return (
     <div className="feature-stack">
@@ -58,6 +105,11 @@ function Planner() {
         description="Work back from your class time. Your plan is saved to your account."
       />
       <form onSubmit={submit} className="feature-stack">
+        {editing && (
+          <p role="status" className="text-sm font-semibold text-primary">
+            Editing saved plan. Changes will replace its departure reminder.
+          </p>
+        )}
         <SelectField
           id="planner-from"
           label="Starting location"
@@ -114,13 +166,31 @@ function Planner() {
           </p>
         )}
         <Button disabled={busy}>
-          {busy ? "Planning…" : "Suggest and save departure"}
+          {busy
+            ? "Planning…"
+            : editing
+              ? "Update departure plan"
+              : "Suggest and save departure"}
         </Button>
+        {editing && (
+          <Button
+            variant="outline"
+            type="button"
+            onClick={() => {
+              setEditing(undefined);
+              setError("");
+            }}
+          >
+            Cancel editing
+          </Button>
+        )}
       </form>
       <Notice title="Allow some breathing room">
-        Wait and ride times use simulated service and approximate route
-        distances. Weather, traffic, and actual boarding availability may change
-        your journey.
+        Schedules and vehicle speeds are simulated: 5 AM–9 PM terminal
+        departures, with 10-minute traditional jeepneys, 12-minute modern
+        jeepneys, and 30-minute buses. Plans include a five-minute pickup wait
+        and estimated walking. Weather, traffic, and actual boarding
+        availability may change your journey.
       </Notice>
       <h2 className="text-lg font-semibold">Saved plans</h2>
       {!plans ? (
@@ -144,11 +214,23 @@ function Planner() {
                   {localDate(p.leaveAt)}
                 </p>
               </div>
+              {p.selectedMode && (
+                <p className="text-sm font-semibold">
+                  {modeLabel(p.selectedMode as TransportMode)} · simulated
+                  schedule
+                </p>
+              )}
+              {p.departureAt && (
+                <p className="text-sm">
+                  Pickup departure <strong>{localDate(p.departureAt)}</strong>
+                </p>
+              )}
               <p>
                 Expected arrival <strong>{localDate(p.arriveAt)}</strong>
               </p>
               <p className="text-sm text-muted-foreground">
-                Class {localDate(p.classAt)} · {p.bufferMinutes} min buffer
+                Class {localDate(p.classAt)} · at least {p.bufferMinutes} min
+                early
               </p>
               <Metrics
                 items={[
@@ -157,18 +239,42 @@ function Planner() {
                   { label: "Ride estimate", value: `${p.rideMinutes} min` },
                 ]}
               />
+              {p.regularFareCentavos !== undefined && (
+                <p className="font-semibold text-primary">
+                  {money(
+                    (p.student ?? true)
+                      ? p.studentFareCentavos!
+                      : p.regularFareCentavos,
+                  )}{" "}
+                  {(p.student ?? true) ? "student" : "regular"} fare estimate
+                </p>
+              )}
+              {p.originWalkMinutes !== undefined && (
+                <p className="text-xs text-muted-foreground">
+                  {p.originWalkMinutes} min to pickup + {p.campusWalkMinutes}{" "}
+                  min campus walk. {p.headwayMinutes} min simulated headway.
+                  Road-distance estimate; confirm actual conditions.
+                </p>
+              )}
               {p.leaveAt < now && (
                 <p className="text-sm text-warning-foreground">
                   This departure time has passed.
                 </p>
               )}
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex flex-wrap gap-2">
+              <Button onClick={() => startPlannedRoute(p)}>
+                {p.routeId ? "Use this route" : "Recalculate plan"}
+              </Button>
+              <Button variant="outline" onClick={() => edit(p)}>
+                Edit plan
+              </Button>
               <Button
                 variant="outline"
                 onClick={async () => {
                   try {
                     await remove({ id: p._id });
+                    if (editing === p._id) setEditing(undefined);
                     toast.success("Plan removed");
                   } catch (e) {
                     toast.error(errorMessage(e));

@@ -1,6 +1,6 @@
 # Departure planner — Michaella
 
-UI owner: **Michaella**. Route: `/planner`.
+Feature owner: **Michaella**. Route: `/planner`.
 
 Class-time form, transport preferences, and departure recommendations.
 
@@ -8,6 +8,8 @@ Start with [your TODO](../../../docs/todos/michaella-planner.md) and [design gui
 
 Edit `screen.tsx` and add feature-only components under `components/`. Keep the route page thin. Add `"use client"` only to components needing local interactions.
 
-Use sample results, not a scheduling service. Optional local arithmetic must be labeled illustrative; no reminder scheduling.
+## Current implementation
 
-UI-only milestone: use fixtures and local state; no external services, permissions, persistent storage, or PWA setup. Shared changes require coordination.
+The connected planner searches simulated 5 AM–9 PM schedules backward from the class deadline using stored OSRM road distance. Saved plans support editing, cancellation, fare estimates, route handoff, and revision-checked durable reminders. See `convex/lib/planning.ts` and `convex/planner.ts`.
+
+The functional-app request supersedes the original UI-only restrictions. The member TODO preserves the initial UI assignment. Read `docs/implementation-status.md` and `docs/completion-audit.md` for current verification and remaining release work. Use free services only.

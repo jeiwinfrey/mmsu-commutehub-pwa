@@ -1,7 +1,7 @@
 import { PageMotion } from "./page-motion";
 import Link from "next/link";
-import { Bell, BusFront } from "@/components/commute/icons";
-import { Button } from "@/components/ui/button";
+import { BusFront } from "@/components/commute/icons";
+import { AlertsBell } from "./alerts-bell";
 import { Badge } from "@/components/ui/badge";
 import { BottomNavigation } from "./bottom-navigation";
 export function PhoneShell({
@@ -28,11 +28,7 @@ export function PhoneShell({
         {standalone ? (
           <Badge variant="secondary">Commute made simple</Badge>
         ) : (
-          <Button asChild variant="ghost" size="icon" className="size-11">
-            <Link href="/alerts" aria-label="Open alerts">
-              <Bell aria-hidden="true" />
-            </Link>
-          </Button>
+          <AlertsBell />
         )}
       </header>
       <main id="main-content" tabIndex={-1} className="app-content">

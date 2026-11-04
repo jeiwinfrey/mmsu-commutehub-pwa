@@ -14,6 +14,8 @@ import type * as community from "../community.js";
 import type * as crons from "../crons.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_geometry from "../lib/geometry.js";
+import type * as lib_planning from "../lib/planning.js";
+import type * as lib_reports from "../lib/reports.js";
 import type * as notifications from "../notifications.js";
 import type * as planner from "../planner.js";
 import type * as push from "../push.js";
@@ -33,6 +35,8 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   "lib/auth": typeof lib_auth;
   "lib/geometry": typeof lib_geometry;
+  "lib/planning": typeof lib_planning;
+  "lib/reports": typeof lib_reports;
   notifications: typeof notifications;
   planner: typeof planner;
   push: typeof push;

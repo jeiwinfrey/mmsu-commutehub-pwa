@@ -1,7 +1,8 @@
 "use client";
 import { useNow } from "@/lib/use-now";
+import { useState } from "react";
 import Link from "next/link";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvexConnectionState } from "convex/react";
 import { api, errorMessage } from "@/lib/backend";
 import { AccountRequired } from "@/components/commute/account-required";
 import { Intro, Metrics, Notice } from "@/components/commute/ui";
@@ -86,8 +87,10 @@ function Journey({
   route: DemoRoute;
   vehicle: Doc<"vehicles">;
 }) {
+  const [saving, setSaving] = useState(false);
   const now = useNow();
-  const { path, loading, retry } = useRoadPath(route),
+  const connection = useConvexConnectionState();
+  const { path, loading, retry, retrying } = useRoadPath(route),
     update = useMutation(api.trips.update);
   const pickup = place(trip.pickupId)!;
   if (loading || !path)
@@ -99,12 +102,19 @@ function Journey({
     );
   const ds = cumulativeDistances(path.points),
     total = ds.at(-1) ?? 1,
-    position = pointOnPath(path.points, ds, vehicle.phase * total),
+    phase =
+      (vehicle.phase +
+        ((Math.max(0, (now || vehicle.updatedAt) - vehicle.updatedAt) / 1000) *
+          vehicle.speedKmh) /
+          3.6 /
+          total) %
+      1,
+    position = pointOnPath(path.points, ds, phase * total),
     pickupDistance = distanceOnPath(path.points, ds, pickup.coordinates),
-    remaining = (pickupDistance - vehicle.phase * total + total) % total,
+    remaining = (pickupDistance - phase * total + total) % total,
     eta = Math.max(1, Math.ceil(remaining / (vehicle.speedKmh / 3.6) / 60)),
     riding = trip.status === "riding",
-    stale = now - vehicle.updatedAt > 60000;
+    stale = !connection.isWebSocketConnected;
   return (
     <div className="feature-stack">
       <Intro
@@ -116,7 +126,15 @@ function Journey({
               : `About ${eta} min\nto your pickup.`
         }
         description={`${pickup.shortName} → ${place(trip.to)?.shortName}`}
-        step={riding ? "ON BOARD" : "WAITING FOR PICKUP"}
+        step={
+          riding
+            ? "ON BOARD"
+            : trip.notified
+              ? remaining / (vehicle.speedKmh / 3.6) < 30
+                ? "ARRIVING"
+                : "APPROACHING"
+              : "WAITING FOR PICKUP"
+        }
       />
       <div className="hero-panel">
         <p className="eyebrow">SIMULATED VEHICLE · NOT A BOOKING</p>
@@ -133,8 +151,8 @@ function Journey({
       )}
       {stale && (
         <Notice title="Updates are stale" warning>
-          The latest position is over a minute old. Arrival estimates are
-          unavailable until the connection recovers.
+          The live connection is interrupted. Arrival estimates are unavailable
+          until the connection recovers.
         </Notice>
       )}
       <RoadMap
@@ -151,8 +169,8 @@ function Journey({
             The dashed line is schematic. Select stops manually and retry road
             routing.
           </Notice>
-          <Button variant="outline" onClick={retry}>
-            Retry road routing
+          <Button variant="outline" onClick={retry} disabled={retrying}>
+            {retrying ? "Retrying…" : "Retry road routing"}
           </Button>
         </>
       )}
@@ -186,7 +204,9 @@ function Journey({
         </CardContent>
       </Card>
       <Button
+        disabled={saving}
         onClick={async () => {
+          setSaving(true);
           try {
             await update({
               id: trip._id,
@@ -195,10 +215,16 @@ function Journey({
             toast.success(riding ? "Trip completed" : "Boarding recorded");
           } catch (e) {
             toast.error(errorMessage(e));
+          } finally {
+            setSaving(false);
           }
         }}
       >
-        {riding ? "I’ve arrived · complete trip" : "I have boarded"}
+        {saving
+          ? "Saving trip…"
+          : riding
+            ? "I’ve arrived · complete trip"
+            : "I have boarded"}
       </Button>
       <Button asChild variant="outline">
         <Link href="/trips">View my trips</Link>

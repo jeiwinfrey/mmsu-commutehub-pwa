@@ -39,3 +39,11 @@ Convex internal jobs create account alerts and send Web Push using VAPID. Device
 `manifest.ts` and icons support installation. `public/sw.js` caches only public shell assets and an offline information page. It never caches private pages, auth/API responses, or map tiles. Disconnected writes remain pending until the connection recovers; they are never marked saved before the server acknowledges them.
 
 `DELETE /api/account` checks origin and authenticated identity, removes that user's application data, then deletes the Clerk account. It is triggered only through a typed confirmation in Profile. Service credentials are server-only and ignored by Git.
+
+## Planner and record lifecycle
+
+The planner uses stored OSRM geometry, explicit simulated terminal service windows (05:00–21:00 Philippine time), and mode headways. It selects the latest feasible scheduled pickup departure and counts origin walk, planned wait, ride, and campus walk once. Saved results carry selected route/mode, tariff estimates, a simulation version, and a revision. A durable `runAt` reminder checks the current revision before creating an alert; edits and deletion invalidate older jobs. Delivery rechecks the plan before sending.
+
+Trips and community feeds paginate independently of active-trip state. Historical trip deletion is owner-scoped and requires a confirmation. Ride again and Use this route create a new draft search, never a restart of a historical vehicle.
+
+Community report cards and alerts read the same report ID. Alerts resolve current content, resolution, and expiry rather than displaying an editable stale copy. Report links query by ID, independent of feed pagination. Eligibility includes saved routes, active trips, and future saved plans. Fanout is idempotent per recipient/report; community device push is limited to one per route per 15 minutes. Queues/traffic expire after 60 minutes, crowding after 15, and service/safety after 120. Report creation is limited to three in ten minutes.

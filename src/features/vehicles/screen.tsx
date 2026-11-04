@@ -57,12 +57,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FareBreakdown } from "./components/fare-breakdown";
 
 export function VehiclesScreen() {
+  const { search } = useDemo();
+  return (
+    <VehicleSelection
+      key={`${search.from}/${search.to}/${search.mode ?? ""}`}
+    />
+  );
+}
+function VehicleSelection() {
   const liveVehicles = useQuery(api.vehicles.list);
   const roadPaths = useQuery(api.vehicles.paths);
   const demo = useDemo();
   const { search, preferences } = demo;
   const router = useRouter();
-  const [mode, setMode] = useState<string>(preferences.mode);
+  const [mode, setMode] = useState<string>(search.mode ?? preferences.mode);
   const [preview, setPreview] = useState("normal");
   const [details, setDetails] = useState<Vehicle | null>(null);
   const selected = commuteRoutes.find((r) => r.id === demo.routeId);

@@ -1,6 +1,6 @@
 # Community — Kacey
 
-UI owner: **Kacey**. Route: `/community`.
+Feature owner: **Kacey**. Route: `/community`.
 
 Report feed, filters, report composer, and confirmation previews.
 
@@ -10,4 +10,8 @@ Edit `screen.tsx` and add feature-only components under `components/`. Keep the 
 
 Share report IDs/categories with Alerts. Do not imply a preview report was published to others.
 
-UI-only milestone: use fixtures and local state; no external services, permissions, persistent storage, or PWA setup. Shared changes require coordination.
+## Current implementation
+
+The public feed is paginated and filterable by category and corridor. Report links load their exact record even outside the newest page. Authenticated publishing/editing/confirmation/flagging uses owner-checked Convex mutations; corridor changes require a new report. Expiry and posting limits are enforced on the server.
+
+The functional-app request supersedes the original UI-only restrictions. The member TODO preserves the initial UI assignment. Read `docs/implementation-status.md` and `docs/completion-audit.md` for current verification and remaining release work. Use free services only.

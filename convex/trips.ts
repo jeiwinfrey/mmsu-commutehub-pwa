@@ -1,3 +1,4 @@
+import { paginationOptsValidator } from "convex/server";
 import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { user } from "./lib/auth";
@@ -83,5 +84,52 @@ export const update = mutation({
         ? { boardedAt: Date.now() }
         : { endedAt: Date.now() }),
     });
+  },
+});
+export const active = query({
+  args: {},
+  handler: async (ctx) => {
+    const i = await user(ctx);
+    return ctx.db
+      .query("trips")
+      .withIndex("by_user", (q) => q.eq("userId", i.subject))
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("status"), "waiting"),
+          q.eq(q.field("status"), "riding"),
+        ),
+      )
+      .first();
+  },
+});
+export const history = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
+    const i = await user(ctx);
+    return ctx.db
+      .query("trips")
+      .withIndex("by_user", (q) => q.eq("userId", i.subject))
+      .order("desc")
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("status"), "completed"),
+          q.eq(q.field("status"), "cancelled"),
+        ),
+      )
+      .paginate(paginationOpts);
+  },
+});
+export const remove = mutation({
+  args: { id: v.id("trips") },
+  handler: async (ctx, { id }) => {
+    const i = await user(ctx),
+      trip = await ctx.db.get(id);
+    if (!trip || trip.userId !== i.subject)
+      throw new ConvexError("Trip not found.");
+    if (trip.status === "waiting" || trip.status === "riding")
+      throw new ConvexError(
+        "Finish or cancel an active trip before deleting it.",
+      );
+    await ctx.db.delete(id);
   },
 });

@@ -1,6 +1,6 @@
 # Waiting for your ride — France
 
-UI owner: **France**. Route: `/commute/tracking`.
+Feature owner: **France**. Route: `/commute/tracking`.
 
 Waiting screen, ETA/speed display, progress, and proximity previews.
 
@@ -10,4 +10,8 @@ Edit `screen.tsx` and add feature-only components under `components/`. Keep the 
 
 Consume shared fixture vehicle/pickup types; coordinate boarding handoff with Trips. No movement engine or notifications.
 
-UI-only milestone: use fixtures and local state; no external services, permissions, persistent storage, or PWA setup. Shared changes require coordination.
+## Current implementation
+
+Tracking loads the persisted active trip and shared simulated vehicle. Map motion is projected from the server clock, including while riding; estimates are withheld when the Convex connection is interrupted. Proximity checks sweep the travelled road between ticks and create one event per waiting trip.
+
+The functional-app request supersedes the original UI-only restrictions. The member TODO preserves the initial UI assignment. Read `docs/implementation-status.md` and `docs/completion-audit.md` for current verification and remaining release work. Use free services only.

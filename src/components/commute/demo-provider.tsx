@@ -12,7 +12,7 @@ export type Preferences = {
   student: boolean;
   nearbyAlerts: boolean;
 };
-type Search = { from: string; to: string };
+type Search = { from: string; to: string; mode?: TransportMode };
 export type Watch = {
   vehicleId: string;
   routeId: string;

@@ -1,8 +1,16 @@
+import { paginationOptsValidator } from "convex/server";
+import { presentReport } from "./lib/reports";
 import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { user, text } from "./lib/auth";
 import { commuteRoutes } from "../src/lib/commute-catalog";
 import { internal } from "./_generated/api";
+const expiryMinutes = (category: string) =>
+  category === "crowding"
+    ? 15
+    : ["traffic", "queue"].includes(category)
+      ? 60
+      : 120;
 const fields = {
   routeId: v.string(),
   category: v.string(),
@@ -19,19 +27,7 @@ export const list = query({
       .order("desc")
       .take(100);
     return Promise.all(
-      reports.map(async (r) => {
-        const confirmations = await ctx.db
-          .query("confirmations")
-          .withIndex("by_report", (q) => q.eq("reportId", r._id))
-          .collect();
-        const { userId, ...safe } = r;
-        return {
-          ...safe,
-          mine: identity?.subject === userId,
-          confirmed: confirmations.some((c) => c.userId === identity?.subject),
-          count: confirmations.length,
-        };
-      }),
+      reports.map((r) => presentReport(ctx, r, identity?.subject)),
     );
   },
 });
@@ -50,25 +46,34 @@ export const publish = mutation({
       routeId: a.routeId,
       category: a.category,
       area: text(a.area, 2, 80, "Area"),
-      description: text(a.description, 10, 600, "Report"),
+      description: text(a.description, 10, 500, "Report"),
       updatedAt: Date.now(),
     };
     if (a.id) {
       const old = await ctx.db.get(a.id);
       if (!old || old.userId !== i.subject)
         throw new ConvexError("Report not found.");
-      if (old.resolved || old.expiresAt < Date.now())
+      if (old.resolved || old.expiresAt <= Date.now())
         throw new ConvexError("This report is no longer active.");
-      await ctx.db.patch(a.id, data);
+      if (old.routeId !== a.routeId)
+        throw new ConvexError(
+          "Resolve this report and post a new one to change its corridor.",
+        );
+      await ctx.db.patch(a.id, {
+        ...data,
+        expiresAt: old.createdAt + expiryMinutes(a.category) * 60000,
+      });
       return a.id;
     }
     const recent = await ctx.db
       .query("reports")
       .withIndex("by_user", (q) => q.eq("userId", i.subject))
       .order("desc")
-      .first();
-    if (recent && Date.now() - recent.createdAt < 30000)
-      throw new ConvexError("Please wait 30 seconds between reports.");
+      .take(3);
+    if (recent.length === 3 && recent[2].createdAt > Date.now() - 10 * 60000)
+      throw new ConvexError(
+        "You can share up to three reports in ten minutes. Please wait before posting again.",
+      );
     const p = await ctx.db
       .query("profiles")
       .withIndex("by_user", (q) => q.eq("userId", i.subject))
@@ -78,7 +83,7 @@ export const publish = mutation({
       userId: i.subject,
       author: p?.name ?? "Commuter",
       createdAt: Date.now(),
-      expiresAt: Date.now() + 2 * 3600000,
+      expiresAt: Date.now() + expiryMinutes(a.category) * 60000,
       resolved: false,
     });
     await ctx.scheduler.runAfter(0, internal.notifications.fanout, {
@@ -102,7 +107,7 @@ export const confirm = mutation({
   handler: async (ctx, { id }) => {
     const i = await user(ctx),
       r = await ctx.db.get(id);
-    if (!r || r.resolved || r.expiresAt < Date.now())
+    if (!r || r.resolved || r.expiresAt <= Date.now())
       throw new ConvexError("Report is no longer active.");
     if (r.userId === i.subject)
       throw new ConvexError("You cannot confirm your own report.");
@@ -134,5 +139,38 @@ export const flag = mutation({
         reportId: id,
         reason: text(reason, 3, 200, "Reason"),
       });
+  },
+});
+
+export const byId = query({
+  args: { id: v.string() },
+  handler: async (ctx, { id }) => {
+    const reportId = ctx.db.normalizeId("reports", id);
+    if (!reportId) return null;
+    const report = await ctx.db.get(reportId);
+    if (!report) return null;
+    const identity = await ctx.auth.getUserIdentity();
+    return presentReport(ctx, report, identity?.subject);
+  },
+});
+export const feed = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    category: v.optional(v.string()),
+    routeId: v.optional(v.string()),
+  },
+  handler: async (ctx, { paginationOpts, category, routeId }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    let feed = ctx.db.query("reports").withIndex("by_time").order("desc");
+    if (category)
+      feed = feed.filter((q) => q.eq(q.field("category"), category));
+    if (routeId) feed = feed.filter((q) => q.eq(q.field("routeId"), routeId));
+    const result = await feed.paginate(paginationOpts);
+    return {
+      ...result,
+      page: await Promise.all(
+        result.page.map((r) => presentReport(ctx, r, identity?.subject)),
+      ),
+    };
   },
 });

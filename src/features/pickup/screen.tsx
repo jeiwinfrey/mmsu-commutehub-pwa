@@ -94,7 +94,7 @@ function PickupJourney({
   const { isAuthenticated } = useConvexAuth();
   const startTrip = useMutation(api.trips.start);
   const [saving, setSaving] = useState(false);
-  const { path, loading, retry } = useRoadPath(route);
+  const { path, loading, retry, retrying } = useRoadPath(route);
   const a = route.stops.findIndex((s) => s.id === demo.search.from),
     b = route.stops.findIndex((s) => s.id === demo.search.to);
   const candidates = route.stops.slice(a, b);
@@ -252,8 +252,12 @@ function PickupJourney({
                       : path.error}
                   </p>
                   {path.source === "schematic" && (
-                    <Button variant="outline" onClick={retry}>
-                      Retry road routing
+                    <Button
+                      variant="outline"
+                      onClick={retry}
+                      disabled={retrying}
+                    >
+                      {retrying ? "Retrying…" : "Retry road routing"}
                     </Button>
                   )}
                 </>

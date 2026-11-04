@@ -1,6 +1,6 @@
 # Your trips — Rocky
 
-UI owner: **Rocky**. Route: `/trips`.
+Feature owner: **Rocky**. Route: `/trips`.
 
 Active-trip summary, boarding/completion prompts, recent trips, and trip details.
 
@@ -8,6 +8,8 @@ Start with [your TODO](../../../docs/todos/rocky-trips.md) and [design guide](..
 
 Edit `screen.tsx` and add feature-only components under `components/`. Keep the route page thin. Add `"use client"` only to components needing local interactions.
 
-Coordinate with Tracking and Routes. Local previews reset on refresh; no saved trip claims.
+## Current implementation
 
-UI-only milestone: use fixtures and local state; no external services, permissions, persistent storage, or PWA setup. Shared changes require coordination.
+Active trips come from `convex/trips.ts`; terminal history is paginated. Ride again opens a fresh vehicle search without restarting the historical vehicle. History deletion is owner-scoped and requires a confirmation; active trips must first be finished or cancelled.
+
+The functional-app request supersedes the original UI-only restrictions. The member TODO preserves the initial UI assignment. Read `docs/implementation-status.md` and `docs/completion-audit.md` for current verification and remaining release work. Use free services only.
