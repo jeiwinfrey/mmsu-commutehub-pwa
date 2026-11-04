@@ -15,3 +15,5 @@ Share report IDs/categories with Alerts. Do not imply a preview report was publi
 The public feed is paginated and filterable by category and corridor. Report links load their exact record even outside the newest page. Authenticated publishing/editing/confirmation/flagging uses owner-checked Convex mutations; corridor changes require a new report. Expiry and posting limits are enforced on the server.
 
 The functional-app request supersedes the original UI-only restrictions. The member TODO preserves the initial UI assignment. Read `docs/implementation-status.md` and `docs/completion-audit.md` for current verification and remaining release work. Use free services only.
+
+The `/moderation` screen lives in `components/moderation-screen.tsx`. Server-authorized moderators can review flags, hide/reinstate, resolve, and dismiss with a required reason and audit trail. Student access is denied on the server. See `docs/service-setup.md` for role configuration; the UI cannot assign roles.

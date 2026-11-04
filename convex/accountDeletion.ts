@@ -25,8 +25,20 @@ export const removeMyData = mutation({
         .filter((q) => q.eq(q.field("reportId"), r._id))
         .collect();
       for (const a of alerts) await ctx.db.delete(a._id);
+      const audit = await ctx.db
+        .query("moderationAudit")
+        .withIndex("by_report", (q) => q.eq("reportId", r._id))
+        .collect();
+      for (const event of audit) await ctx.db.delete(event._id);
       await ctx.db.delete(r._id);
     }
+    // Keep other users’ decisions while removing this deleted actor’s identifier.
+    const actions = await ctx.db
+      .query("moderationAudit")
+      .withIndex("by_actor", (q) => q.eq("actor", i.subject))
+      .collect();
+    for (const event of actions)
+      await ctx.db.patch(event._id, { actor: undefined });
     for (const table of [
       "deliveryAttempts",
       "profiles",

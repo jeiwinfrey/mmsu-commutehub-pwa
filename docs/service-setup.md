@@ -28,3 +28,11 @@ Public OSRM/OSM services have no application-specific SLA. Do not prefetch maps,
 ## This workspace’s approved deployment
 
 The owner approved Clerk CLI access for `jeiwinfreyulep12@gmail.com` in “Jeiwinfrey’s Organization,” plus storage of this app’s development Clerk secret/configuration in the Vercel Hobby project `mmsu-commutehub-pwa` under `jeiwinfrey’s projects`. Do not ask for the same approval again. Browser use currently reports disabled in Work settings; finish authorization and deployment when that capability is restored. No paid plan or trial is authorized.
+
+## Moderator access
+
+Set `MODERATOR_SUBJECTS` in the **Convex deployment environment**, containing exact Clerk user subjects separated by commas. It is not a `NEXT_PUBLIC_` setting and does not belong in browser configuration. Verify the identity in Clerk before adding it. This workspace's existing app owner is configured as the initial development moderator; no student/test identity is authorized. Removing a subject revokes its server access. An absent/empty value denies all moderation access.
+
+An authorized user opens Profile → Review community flags. Open a flag, select a decision, enter a reason, then save. Reviewed flags include reinstatement and dated decision history. This does not certify the accuracy of a report or terminal.
+
+The optional connected moderation browser test uses `E2E_MODERATOR_EMAIL` for an **existing authorized development account**. It reviews only a dedicated QA report, does not edit the moderator's profile, does not grant roles, and removes the QA report afterward. Never run the integration suite against production services. The standard suite skips that positive moderator test when the variable is absent; isolated backend tests always cover authorization.

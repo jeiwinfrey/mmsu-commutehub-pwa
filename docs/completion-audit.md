@@ -1,6 +1,6 @@
 # Completion audit
 
-The goal remains the complete functional mobile app. Verification at this checkpoint: lint, TypeScript, production build, twenty-one backend tests and eight expanded production-browser tests passed. Passing the current tests does not establish that every PRD release gate is complete. No subscriptions, trials, paid plans, or purchases are authorized.
+The goal remains the complete functional mobile app. Verification at this checkpoint: lint, TypeScript, production build, twenty-four backend tests and nine expanded production-browser tests passed. Passing the current tests does not establish that every PRD release gate is complete. No subscriptions, trials, paid plans, or purchases are authorized.
 
 ## Current evidence
 
@@ -21,7 +21,7 @@ The goal remains the complete functional mobile app. Verification at this checkp
 - The owner approved Clerk CLI access/ownership and development credential storage in the named Vercel Hobby project. Local browser use is disabled in Work settings, so neither approval has been executed yet; it must be enabled to finish setup.
 - Physical iOS/Android install, notification permission states, background delivery and notification click behavior require evidence beyond local manifest/offline tests.
 - Real terminal bays, directional boarding permissions, campus walking access, and official fare-matrix provenance remain unverified; current approximate catalog/tariffs are explicitly labeled. See `terminal-research.md`.
-- The broader PRD still calls for moderation/admin roles, catalog review/audit history, full service-window/peak-congestion alignment, earlier/late planner alternatives and extended preference controls. These are not made complete by a passing browser regression suite.
+- The broader PRD still calls for catalog maintenance/provenance review, investigation-hold release controls, full service-window/peak-congestion alignment, earlier/late planner alternatives and extended preference controls. These are not made complete by a passing browser regression suite.
 - Investigate the development SDK's session-refresh warnings under a production/staging origin; do not treat successful client rendering alone as a complete session-lifecycle audit.
 - Failed-road-route retry now performs a real server re-fetch. Backend tests cover invalid routes, provider failure, per-route cooldown, global throttling, successful replacement, and the ready-cache shortcut. Physical map/GPS checks remain part of phone QA.
 
@@ -36,3 +36,9 @@ Per-device push attempt claims prevent duplicate successful sends, ignore stale 
 PWA update handling is verified with an actual old/new worker: an update waits, “Later” defers it, revisiting shows it again, and explicit activation reloads the current route. The browser test uses a local HTTP proxy that preserves Clerk cookies and serves versioned test workers; it does not modify the real user browser.
 
 Disconnected submissions are tested through the real account UI: an offline edit remains visible as an unsent draft, is rejected immediately, and is absent from the database after reconnect/reload. Twenty-one backend tests and eight production-browser tests pass at this checkpoint; the goal remains active for the unverified release requirements above.
+
+## Community moderation follow-up
+
+The existing development app owner is server-authorized for `/moderation`; students cannot self-assign a role. The mobile view paginates open/reviewed flags, requires a decision reason, and records hide/reinstate/resolve/dismiss decisions with before/after audit state. Hidden reports are excluded from public queries, redacted in account inboxes, and rejected by pending push eligibility. Restoration preserves expiry and does not re-send alerts. Account deletion removes authored-report audit evidence and anonymizes a deleted reviewer on other reports. Role revocation is through server deployment configuration, never a profile toggle.
+
+Backend checks cover fail-closed authorization, unauthorized reads/writes, hiding across all read models, delivery suppression, duplicate decisions, restoration, separate flag review and deletion/anonymization. The optional connected browser moderator check acts only on a disposable QA report, changes no owner profile data, and verifies deny/hide/reinstate/history and 320/430/844px layout. Catalog provenance maintenance, hold-release controls, and physical-device review remain separate work.

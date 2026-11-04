@@ -24,6 +24,7 @@ export const list = query({
     const reports = await ctx.db
       .query("reports")
       .withIndex("by_time")
+      .filter((q) => q.neq(q.field("hidden"), true))
       .order("desc")
       .take(100);
     return Promise.all(
@@ -53,7 +54,7 @@ export const publish = mutation({
       const old = await ctx.db.get(a.id);
       if (!old || old.userId !== i.subject)
         throw new ConvexError("Report not found.");
-      if (old.resolved || old.expiresAt <= Date.now())
+      if (old.hidden || old.resolved || old.expiresAt <= Date.now())
         throw new ConvexError("This report is no longer active.");
       if (old.routeId !== a.routeId)
         throw new ConvexError(
@@ -107,7 +108,7 @@ export const confirm = mutation({
   handler: async (ctx, { id }) => {
     const i = await user(ctx),
       r = await ctx.db.get(id);
-    if (!r || r.resolved || r.expiresAt <= Date.now())
+    if (!r || r.hidden || r.resolved || r.expiresAt <= Date.now())
       throw new ConvexError("Report is no longer active.");
     if (r.userId === i.subject)
       throw new ConvexError("You cannot confirm your own report.");
@@ -126,7 +127,8 @@ export const flag = mutation({
   args: { id: v.id("reports"), reason: v.string() },
   handler: async (ctx, { id, reason }) => {
     const i = await user(ctx);
-    if (!(await ctx.db.get(id))) throw new ConvexError("Report not found.");
+    const report = await ctx.db.get(id);
+    if (!report || report.hidden) throw new ConvexError("Report not found.");
     const old = await ctx.db
       .query("flags")
       .withIndex("by_user_report", (q) =>
@@ -148,7 +150,7 @@ export const byId = query({
     const reportId = ctx.db.normalizeId("reports", id);
     if (!reportId) return null;
     const report = await ctx.db.get(reportId);
-    if (!report) return null;
+    if (!report || report.hidden) return null;
     const identity = await ctx.auth.getUserIdentity();
     return presentReport(ctx, report, identity?.subject);
   },
@@ -161,7 +163,11 @@ export const feed = query({
   },
   handler: async (ctx, { paginationOpts, category, routeId }) => {
     const identity = await ctx.auth.getUserIdentity();
-    let feed = ctx.db.query("reports").withIndex("by_time").order("desc");
+    let feed = ctx.db
+      .query("reports")
+      .withIndex("by_time")
+      .filter((q) => q.neq(q.field("hidden"), true))
+      .order("desc");
     if (category)
       feed = feed.filter((q) => q.eq(q.field("category"), category));
     if (routeId) feed = feed.filter((q) => q.eq(q.field("routeId"), routeId));

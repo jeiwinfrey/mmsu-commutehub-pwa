@@ -139,6 +139,7 @@ export default defineSchema({
     expiresAt: v.number(),
     resolved: v.boolean(),
     retentionHold: v.optional(v.boolean()),
+    hidden: v.optional(v.boolean()),
   })
     .index("by_time", ["createdAt"])
     .index("by_expiry", ["expiresAt"])
@@ -150,9 +151,24 @@ export default defineSchema({
     userId: v.string(),
     reportId: v.id("reports"),
     reason: v.string(),
+    reviewedAt: v.optional(v.number()),
   })
     .index("by_user_report", ["userId", "reportId"])
-    .index("by_report", ["reportId"]),
+    .index("by_report", ["reportId"])
+    .index("by_reviewed", ["reviewedAt"]),
+  moderationAudit: defineTable({
+    reportId: v.id("reports"),
+    actor: v.optional(v.string()),
+    action: v.string(),
+    reason: v.string(),
+    beforeHidden: v.boolean(),
+    afterHidden: v.boolean(),
+    beforeResolved: v.boolean(),
+    afterResolved: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_report", ["reportId"])
+    .index("by_actor", ["actor"]),
   notifications: defineTable({
     userId: v.string(),
     eventKey: v.optional(v.string()),

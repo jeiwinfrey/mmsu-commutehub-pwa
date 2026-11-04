@@ -21,6 +21,17 @@ export const list = query({
         const report = notification.reportId
           ? await ctx.db.get(notification.reportId)
           : null;
+        if (notification.reportId && (!report || report.hidden))
+          return {
+            ...notification,
+            title: "Report unavailable",
+            body: "This report was removed or hidden after review.",
+            href: "/community",
+            reportResolved: false,
+            reportExpiresAt: undefined,
+            reportObservedAt: undefined,
+            reportAuthor: undefined,
+          };
         return {
           ...notification,
           title: report
@@ -108,7 +119,7 @@ export const fanout = internalMutation({
   handler: async (ctx, { reportId }) => {
     const r = await ctx.db.get(reportId);
     if (!r) return;
-    if (r.resolved || r.expiresAt <= Date.now()) return;
+    if (r.hidden || r.resolved || r.expiresAt <= Date.now()) return;
     const recipients = new Set<string>();
     const saved = await ctx.db
       .query("savedRoutes")
@@ -222,6 +233,7 @@ export const deliveryAllowed = internalQuery({
       const r = await ctx.db.get(a.reportId);
       if (
         !r ||
+        r.hidden ||
         r.resolved ||
         r.expiresAt <= Date.now() ||
         profile?.communityAlerts === false

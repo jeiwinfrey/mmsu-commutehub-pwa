@@ -508,3 +508,118 @@ test("PWA updates wait for an explicit reload and keep the user's current page",
     await new Promise<void>((resolve) => proxy.close(() => resolve()));
   }
 });
+
+test("server-authorized moderator reviews a QA report and students cannot enter review", async ({
+  page,
+  browser,
+}) => {
+  test.skip(
+    !process.env.E2E_MODERATOR_EMAIL,
+    "Set an existing authorized development moderator email for this check.",
+  );
+  await page.goto("/commute");
+  await clerk.signIn({
+    page,
+    emailAddress: "commutehub-qa+clerk_test@example.com",
+  });
+  await page.goto("/moderation");
+  await expect(
+    page.getByText("Moderator access required", { exact: true }),
+  ).toBeVisible();
+  const token = await page.evaluate(async () => {
+    const app = (
+      window as unknown as {
+        Clerk: {
+          session: { getToken: (a: { template: string }) => Promise<string> };
+        };
+      }
+    ).Clerk;
+    return app.session.getToken({ template: "convex" });
+  });
+  const client = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  client.setAuth(token);
+  const description = `Moderation QA observation ${Date.now()}. Candidate stop queue.`;
+  const id = await client.mutation(api.community.publish, {
+    routeId: "modern-jeepney-jeepney-outbound",
+    category: "queue",
+    area: "QA candidate stop",
+    description,
+  });
+  await client.mutation(api.community.flag, {
+    id,
+    reason: "QA flag for review workflow verification",
+  });
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 1,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const moderator = await context.newPage();
+  await setupClerkTestingToken({ page: moderator });
+  await moderator.goto("/commute");
+  await clerk.signIn({
+    page: moderator,
+    emailAddress: process.env.E2E_MODERATOR_EMAIL!,
+  });
+  // This context only reviews the disposable QA report; no owner profile/data is edited.
+  await moderator.goto("/moderation");
+  const card = moderator
+    .locator('[data-slot="card"]')
+    .filter({ hasText: description });
+  await expect(card).toBeVisible();
+  await card
+    .getByLabel("Review reason")
+    .fill("QA verification: hide this disposable observation.");
+  await card.getByRole("button", { name: "Save review decision" }).click();
+  await expect(
+    moderator.getByText("Review decision saved", { exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(async () => client.query(api.community.byId, { id }))
+    .toBe(null);
+  await moderator.getByRole("combobox", { name: "Review queue" }).click();
+  await moderator
+    .getByRole("option", { name: "Reviewed flags", exact: true })
+    .click();
+  await expect(card.getByText("Hidden", { exact: true })).toBeVisible();
+  await card.getByRole("combobox", { name: "Decision" }).click();
+  await moderator
+    .getByRole("option", { name: "Reinstate report", exact: true })
+    .click();
+  await card
+    .getByLabel("Review reason")
+    .fill("QA verification: restore the disposable observation.");
+  await card.getByRole("button", { name: "Save review decision" }).click();
+  await expect
+    .poll(
+      async () => (await client.query(api.community.byId, { id }))?.description,
+    )
+    .toBe(description);
+  await card.getByRole("button", { name: "View decision history" }).click();
+  await expect(
+    card.getByText("QA verification: restore the disposable observation.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  for (const width of [320, 430, 844]) {
+    await moderator.setViewportSize({ width, height: 844 });
+    expect(
+      await moderator.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+  }
+  await moderator.setViewportSize({ width: 390, height: 1800 });
+  await moderator.reload();
+  await moderator.getByRole("combobox", { name: "Review queue" }).click();
+  await moderator
+    .getByRole("option", { name: "Reviewed flags", exact: true })
+    .click();
+  await expect(card).toBeVisible();
+  await moderator.screenshot({
+    path: "/tmp/commutehub-moderation.png",
+    fullPage: false,
+  });
+  await context.close();
+});

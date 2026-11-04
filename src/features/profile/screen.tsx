@@ -36,6 +36,7 @@ export function ProfileScreen() {
   );
 }
 function Profile() {
+  const moderator = useQuery(api.moderation.access);
   const profile = useQuery(api.accounts.me),
     saved = useQuery(api.accounts.saved),
     save = useMutation(api.accounts.save),
@@ -145,6 +146,11 @@ function Profile() {
         </CardContent>
       </Card>
       <InstallApp />
+      {moderator && (
+        <Button asChild variant="outline">
+          <Link href="/moderation">Review community flags</Link>
+        </Button>
+      )}
       <Button asChild variant="outline">
         <Link href="/onboarding">Review onboarding and permissions</Link>
       </Button>

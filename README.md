@@ -56,6 +56,8 @@ npm run test:e2e
 
 Browser integration tests use a dedicated Clerk **development** test account under `example.com`; no real verification emails are sent. They exercise the connected development database. Do not run them against production accounts. Playwright artifacts and all credentials are ignored.
 
+Moderators: the existing development app owner can open **Profile → Review community flags**. Server configuration controls access; students cannot assign themselves roles. See [moderator setup and review guide](docs/service-setup.md#moderator-access).
+
 ## App flow
 
 Welcome/sign-in → onboarding → route → vehicle and fare → pickup and radius → tracking → boarding → completion. Five navigation destinations: Commute, Planner, Trips, Community, Profile. The header bell opens Alerts.

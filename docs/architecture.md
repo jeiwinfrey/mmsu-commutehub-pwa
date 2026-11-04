@@ -22,7 +22,7 @@ Unsaved route/vehicle/pickup selections use browser session storage to survive O
 | `/commute/tracking` | France |
 | `/trips` | Rocky |
 | `/planner` | Michaella |
-| `/community` | Kacey |
+| `/community`, `/moderation` | Kacey |
 | `/alerts` | Princess |
 | `/profile` | Chadrick |
 
@@ -55,3 +55,11 @@ Trip creation revalidates the exact selected run and stop order, snapshots run t
 Push delivery uses `deliveryAttempts` keyed by event and device registration. A transactional claim prevents duplicate successful sends and stale retry completions. Transient failures retry at bounded backoff within proximity TTL (two minutes) or general TTL (five minutes), at most four attempts; 404/410 registrations are pruned. `sent` records transport acceptance only, never viewing. Event IDs become service-worker notification tags.
 
 The daily bounded retention job removes delivery attempts after 30 days, inbox items after 90 days, and unflagged reports 90 days after expiry. Reports with flags are retained for review. Exact student GPS is never persisted; trip history retains named candidate stops. Provider backups follow provider policies separately.
+
+## Community moderation
+
+`/moderation` is linked from Profile only for authorized moderators. `convex/lib/moderator.ts` derives permission from the authenticated Clerk subject and the server deployment's comma-separated `MODERATOR_SUBJECTS`. Missing configuration denies everyone; email, display name, profile fields, and client arguments never grant a role. The existing project owner is the initial moderator in the development deployment. No student or QA account has this role.
+
+Flag queues paginate open/reviewed records. Decisions hide/reinstate reports, resolve incidents, or dismiss a selected flag. Each requires a 10–500 character explanation and appends a server-only audit entry with actor, timestamp and before/after state. There is no public audit mutation. Public projections omit reporter/flagger authentication subjects. Hidden reports are unavailable through feed/detail queries, cannot be edited or confirmed by students, redact linked inbox content, and stop queued push delivery. Previously delivered OS notifications cannot be recalled. Reinstatement preserves the original expiry and never fans out a second notification.
+
+Flagged report evidence is retained for investigation. Deleting the report author's account removes its flags and report audit records. Deleting a moderator's account anonymizes that actor identifier on other reports' audit records. Stop/fare catalog maintenance and investigation-hold release controls are still separate work; this view only reviews community reports.
